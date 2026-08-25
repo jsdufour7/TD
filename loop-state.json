@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-08-24T20:20:00Z",
+  "branch": "arena/01a034bd-td",
+  "baseCommit": "340aca532d42059f56ea399e8e9fb9b7b8e4e1bd",
+  "phase": "phase-6-partial",
+  "activeObjective": "Make the autonomous coding loop verifiable end-to-end with a real model provider.",
+  "verification": {
+    "typecheck": { "command": "npx tsc --noEmit", "errors": 0 },
+    "lint": { "command": "npm run lint", "clean": true },
+    "tests": { "command": "npm test", "passed": 54, "failed": 0, "files": 4 },
+    "build": { "command": "npm run build", "routes": 44, "warnings": 5 },
+    "combined": { "command": "npm run verify", "exitCode": 0 }
+  },
+  "counts": {
+    "sourceFiles": 102,
+    "sourceLines": 16768,
+    "domainTables": 39,
+    "apiRoutes": 22,
+    "pages": 19,
+    "tools": 26,
+    "agentDefinitions": 13
+  },
+  "completed": [
+    "Phase 0 audit: repository was empty (1 commit, 0 files)",
+    "Phase 1: auth, 39-table schema, projects, sandbox, navigation",
+    "Phase 2: provider adapters, credential encryption, router, health, usage",
+    "Phase 3: 13 agents, goals, tasks, runs, events, checkpoints, recovery",
+    "Phase 4: 26 tools, permission enforcement, invocation records, cancellation",
+    "Phase 5 partial: file tree, diff review, terminal history, preview frame",
+    "Phase 6 partial: deterministic plan/execute/verify/repair loop verified with real commands",
+    "Runtime verification over HTTP: auth, project creation, inspection, autonomous run, isolation, path traversal",
+    "Test suite: 54 cases against a real disposable PostgreSQL database",
+    "Documentation: spec, architecture, status, backlog, 9 ADRs, bugs, security, runbook"
+  ],
+  "blockers": [
+    {
+      "id": "no-model-provider",
+      "impact": "LLM agent tool loop is implemented but unexercised; reasoning tasks are marked blocked",
+      "unblock": "Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or LOCAL_MODEL_BASE_URL for a local OpenAI-compatible endpoint",
+      "external": true
+    },
+    {
+      "id": "no-browser-runtime",
+      "impact": "Browser verification tools and Playwright E2E specs cannot run",
+      "unblock": "npx playwright install chromium (blocked here: npm registry only)",
+      "external": true
+    },
+    {
+      "id": "no-container-runtime",
+      "impact": "Sandbox isolation is path-confinement only, not containers",
+      "unblock": "Docker/gVisor/Firecracker unavailable in this environment",
+      "external": true
+    }
+  ],
+  "nextAction": {
+    "id": "P0-1",
+    "title": "Verify the LLM agent tool loop end-to-end",
+    "detail": "With a provider configured, run the spec section 52 acceptance test: 'Add a Settings page with a profile form. Follow the existing design system. Add validation and tests.' Confirm plan -> tasks -> edits -> typecheck -> tests -> diff -> review -> memory, then confirm the run survives a browser refresh.",
+    "file": "src/engine/agent-executor.ts",
+    "entryPoint": "runWithModel"
+  },
+  "knownLimitations": [
+    "Single-node in-process run worker",
+    "Deployment adapters not implemented; deploy records an explicit error",
+    "web_search not implemented; returns a clear not-configured failure",
+    "File upload endpoint not wired; files table and parsing are modelled",
+    "Semantic retrieval modelled but unused",
+    "Conversation threads modelled but unused"
+  ],
+  "docs": [
+    "AUDIT_PHASE0.md",
+    "AI_CORE_SPEC.md",
+    "ARCHITECTURE.md",
+    "IMPLEMENTATION_STATUS.md",
+    "BACKLOG.md",
+    "DECISIONS.md",
+    "BUGS.md",
+    "SECURITY.md",
+    "RUNBOOK.md",
+    "SESSION_LOG.md"
+  ]
+}
