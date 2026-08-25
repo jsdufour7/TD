@@ -5,6 +5,7 @@ import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { requireUser } from '@/auth/guards';
 import { CooExecutive } from '@/components/coo/coo-executive';
+import { Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 
 export const dynamic = 'force-dynamic';
@@ -65,6 +66,7 @@ export default async function CooPage({ searchParams }: { searchParams: Promise<
   return (
     <div className="space-y-4 p-5">
       <PageHeader
+        icon={<Sparkles className="size-4" />}
         title="COO"
         subtitle="Le COO est votre point d'entrée partout : parlez-lui, il comprend, planifie et exécute."
         action={

@@ -1,151 +1,258 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { CornerDownLeft, Mic, MicOff, Send, Sparkles, Volume2, VolumeX } from 'lucide-react';
 import { cn } from '@/lib/ui';
+import { useSpeechInput, useSpeechOutput } from '@/lib/use-voice';
+import { Button, IconButton, Notice } from '@/components/ui/primitives';
+import type { AssignmentsView } from '@/ai/assignments-view';
+import { CooModelPicker } from './coo-model-picker';
 
 type Msg = { id: string; role: 'user' | 'coo'; content: string; mode?: string | null };
 
+const SUGGESTIONS = [
+  { label: 'État du projet', prompt: 'Où en sommes-nous ?' },
+  { label: 'Ce qui bloque', prompt: "Qu'est-ce qui est bloqué et pourquoi ?" },
+  { label: 'Derniers échecs', prompt: 'Quels sont les derniers échecs ?' },
+  { label: 'Coût réel', prompt: 'Combien ça a coûté en jetons ?' },
+  { label: 'Mémoire', prompt: 'De quoi te souviens-tu sur ce projet ?' },
+];
+
 /**
- * Chat COO compact, une seule colonne, conçu pour le drawer global.
- * Vos messages (à droite, accentués) et ceux du COO (à gauche) sont toujours
- * visibles ; saisie avec Entrée, micro push-to-talk, lecture vocale optionnelle.
+ * COO conversation — single column, built for the global drawer.
+ *
+ * Your messages sit on the right, the COO's on the left, and the composer is
+ * always fully visible. Voice is a click-to-talk toggle (never press-and-hold):
+ * the browser's own permission prompt appears on the first click, and every
+ * refusal — unsupported browser, blocked mic, no device, no speech — is named
+ * with the action that fixes it.
  */
-export function CooChat({ projectId, initialMessages }: { projectId: string; initialMessages: Msg[] }) {
+export function CooChat({
+  projectId,
+  initialMessages,
+  assignments,
+}: {
+  projectId: string;
+  initialMessages: Msg[];
+  assignments: AssignmentsView | null;
+}) {
   const [messages, setMessages] = useState<Msg[]>(initialMessages);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
-  const [listening, setListening] = useState(false);
-  const [voiceOn, setVoiceOn] = useState(false);
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const recRef = useRef<{ stop: () => void; abort: () => void } | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const voice = useSpeechOutput();
+  const [voiceOn, setVoiceOn] = useState(false);
+
+  const input = useSpeechInput({
+    interimResults: true,
+    onFinal: (text) => {
+      void sendWith(text);
+    },
+    // Live transcript straight into the composer: you see what will be sent.
+    onInterim: (text) => {
+      if (text) setDraft(text);
+    },
+  });
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
-  }, [messages, busy]);
-
-  function speak(text: string) {
-    if (!voiceOn) return;
-    try {
-      const synth = window.speechSynthesis;
-      if (!synth) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.lang = 'fr-FR';
-      const fr = synth.getVoices().find((v) => v.lang.startsWith('fr'));
-      if (fr) u.voice = fr;
-      u.rate = 1.02;
-      synth.cancel();
-      synth.speak(u);
-    } catch {
-      /* confort, jamais bloquant */
-    }
-  }
-
-  function startListening() {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SR) return;
-    try {
-      recRef.current?.abort();
-    } catch {
-      /* ignore */
-    }
-    const rec = new SR();
-    rec.lang = 'fr-FR';
-    rec.interimResults = false;
-    rec.onresult = (e: { results: ArrayLike<{ isFinal: boolean; 0: { transcript: string } }> }) => {
-      const t = e.results[0]?.[0]?.transcript?.trim();
-      setListening(false);
-      if (t) void sendWith(t);
-    };
-    rec.onend = () => setListening(false);
-    rec.onerror = () => setListening(false);
-    recRef.current = rec;
-    setListening(true);
-    rec.start();
-  }
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, busy, input.interim]);
 
   async function sendWith(text: string) {
-    if (!text.trim() || busy) return;
+    const value = text.trim();
+    if (!value || busy) return;
     setBusy(true);
-    setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', content: text.trim() }]);
+    setMessages((m) => [...m, { id: `u-${Date.now()}`, role: 'user', content: value }]);
     setDraft('');
     try {
       const res = await fetch(`/api/projects/${projectId}/coo/messages`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ content: text.trim(), autonomyMode: 'autonomous' }),
+        body: JSON.stringify({ content: value, autonomyMode: 'autonomous' }),
       });
       const body = (await res.json()) as { message?: { content: string; mode?: string } };
       const content = body.message?.content ?? 'Je n’ai pas pu répondre.';
       setMessages((m) => [...m, { id: `c-${Date.now()}`, role: 'coo', content, mode: body.message?.mode }]);
-      speak(content);
+      if (voiceOn) void voice.speak(content);
     } catch {
-      setMessages((m) => [...m, { id: `e-${Date.now()}`, role: 'coo', content: 'Le COO est injoignable.' }]);
+      setMessages((m) => [
+        ...m,
+        { id: `e-${Date.now()}`, role: 'coo', content: 'Le COO est injoignable (erreur réseau ou serveur).' },
+      ]);
     } finally {
       setBusy(false);
     }
   }
 
+  const micState = !input.supported
+    ? 'unsupported'
+    : input.listening
+      ? 'listening'
+      : input.error
+        ? 'error'
+        : 'idle';
+
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
-          <p className="text-[12px] text-ink-4">Posez une question ou donnez un objectif au COO.</p>
-        ) : null}
-        {messages.map((m) => (
-          <div key={m.id} className={cn('flex', m.role === 'user' ? 'justify-end' : 'justify-start')}>
-            <div className={cn('max-w-[85%] rounded-xl px-3 py-2', m.role === 'user' ? 'bg-accent/20' : 'bg-surface-2')}>
-              <p className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-ink-4">
-                {m.role === 'user' ? 'Vous' : 'COO'}
-              </p>
-              <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-1">{m.content}</p>
+          <div className="space-y-3 pt-2">
+            <div className="flex items-start gap-2.5">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full border border-accent/30 bg-accent-soft text-accent">
+                <Sparkles className="size-3.5" />
+              </span>
+              <div className="min-w-0 flex-1 rounded-xl rounded-tl-sm border border-line bg-surface-1 px-3 py-2.5">
+                <p className="text-[13px] leading-relaxed text-ink-1">
+                  Je suis votre COO. Donnez-moi un objectif ou posez une question : je planifie, je délègue aux agents,
+                  je vérifie et je vous rapporte. Vous pouvez aussi me parler au micro.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-1.5 pl-9">
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s.label}
+                  type="button"
+                  onClick={() => void sendWith(s.prompt)}
+                  className="rounded-full border border-line bg-surface-1 px-2.5 py-1 text-[11.5px] text-ink-3 transition-colors hover:border-accent/40 hover:bg-accent-soft hover:text-accent"
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
           </div>
-        ))}
-        {busy ? <p className="text-[12px] text-accent">Le COO réfléchit…</p> : null}
+        ) : null}
+
+        {messages.map((m) =>
+          m.role === 'user' ? (
+            <div key={m.id} className="animate-fade-up flex justify-end">
+              <div className="max-w-[85%] rounded-xl rounded-br-sm bg-accent px-3 py-2 text-accent-ink shadow-card">
+                <p className="whitespace-pre-wrap text-[13px] leading-relaxed">{m.content}</p>
+              </div>
+            </div>
+          ) : (
+            <div key={m.id} className="animate-fade-up flex items-start gap-2.5">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full border border-line bg-surface-2 text-ink-3">
+                <Sparkles className="size-3.5" />
+              </span>
+              <div className="min-w-0 max-w-[85%] rounded-xl rounded-tl-sm border border-line bg-surface-1 px-3 py-2.5">
+                <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-ink-1">{m.content}</p>
+                {m.mode === 'unavailable' ? (
+                  <p className="mt-1.5 text-[10.5px] text-warn">Réponse générée sans modèle · données réelles du projet</p>
+                ) : null}
+              </div>
+            </div>
+          ),
+        )}
+
+        {busy ? (
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-7 shrink-0 place-items-center rounded-full border border-line bg-surface-2 text-ink-3">
+              <Sparkles className="size-3.5" />
+            </span>
+            <div className="flex items-center gap-1 rounded-xl border border-line bg-surface-1 px-3 py-3">
+              <span className="thinking-dot size-1.5 rounded-full bg-accent" />
+              <span className="thinking-dot size-1.5 rounded-full bg-accent" />
+              <span className="thinking-dot size-1.5 rounded-full bg-accent" />
+              <span className="ml-1.5 text-[11.5px] text-ink-3">Le COO réfléchit et orchestre…</span>
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <form
-        className="flex items-end gap-2 border-t border-line p-3"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void sendWith(draft);
-        }}
-      >
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              void sendWith(draft);
+      {/* Composer */}
+      <div className="border-t border-line bg-surface-1/60 px-3 pt-2.5 pb-3">
+        {input.error ? (
+          <Notice
+            tone="danger"
+            title={input.error.message}
+            className="mb-2"
+            action={
+              <Button size="xs" variant="outline" onClick={() => void input.start()}>
+                Réessayer
+              </Button>
             }
+          >
+            {input.error.hint}
+          </Notice>
+        ) : null}
+
+        {micState === 'unsupported' ? (
+          <Notice tone="info" className="mb-2" title="Reconnaissance vocale indisponible">
+            Ce navigateur n’expose pas la Web Speech API. Utilisez Chrome ou Edge, ou écrivez simplement votre message.
+          </Notice>
+        ) : null}
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void sendWith(draft);
           }}
-          rows={2}
-          placeholder="Écrivez au COO… (Entrée pour envoyer)"
-          className="max-h-32 min-h-10 w-full flex-1 resize-none rounded-lg border border-line bg-surface-2 px-3 py-2 text-[13px] text-ink-1 focus:border-accent focus:ring-2 focus:ring-accent/20 focus:outline-none"
-        />
-        <button
-          type="button"
-          title="Parler (push-to-talk)"
-          onPointerDown={() => startListening()}
-          onPointerUp={() => recRef.current?.stop()}
-          className={cn('h-10 w-10 shrink-0 rounded-lg border text-[14px]', listening ? 'border-danger/40 bg-danger/10 text-danger' : 'border-line text-ink-3')}
+          className="rounded-xl border border-line bg-surface-2 transition-[border-color,box-shadow] focus-within:border-accent focus-within:ring-2 focus-within:ring-accent/20"
         >
-          🎙
-        </button>
-        <button
-          type="button"
-          title={voiceOn ? 'Couper la voix' : 'Lire les réponses'}
-          onClick={() => setVoiceOn((v) => !v)}
-          className={cn('h-10 w-10 shrink-0 rounded-lg border text-[14px]', voiceOn ? 'border-ok/40 bg-ok/10 text-ok' : 'border-line text-ink-3')}
-        >
-          🔊
-        </button>
-        <button type="submit" disabled={busy || !draft.trim()} className="h-10 shrink-0 rounded-lg bg-accent px-3 text-[13px] font-medium text-accent-ink disabled:opacity-40">
-          ➤
-        </button>
-      </form>
+          <textarea
+            ref={composerRef}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                void sendWith(draft);
+              }
+            }}
+            rows={2}
+            placeholder={input.listening ? 'Je vous écoute…' : 'Écrivez au COO… (Entrée pour envoyer)'}
+            className="max-h-32 min-h-[3.25rem] w-full resize-none bg-transparent px-3 pt-2.5 pb-1 text-[13px] leading-relaxed text-ink-1 placeholder:text-ink-4 focus:outline-none"
+          />
+
+          <div className="flex items-center gap-1.5 px-2 pb-2">
+            <button
+              type="button"
+              onClick={() => void input.toggle()}
+              disabled={!input.supported}
+              aria-pressed={input.listening}
+              title={input.listening ? 'Arrêter l’écoute' : 'Parler au COO (clic)'}
+              className={cn(
+                'inline-flex h-8 items-center gap-1.5 rounded-md border px-2 text-[11.5px] transition-colors',
+                input.listening
+                  ? 'animate-mic-ring border-danger/40 bg-danger/12 text-danger'
+                  : micState === 'error'
+                    ? 'border-danger/30 text-danger hover:bg-danger/10'
+                    : 'border-line text-ink-3 hover:border-line-strong hover:text-ink-1 disabled:opacity-40',
+              )}
+            >
+              {input.listening ? <Mic className="size-3.5" /> : micState === 'unsupported' ? <MicOff className="size-3.5" /> : <Mic className="size-3.5" />}
+              {input.listening ? 'Écoute…' : 'Parler'}
+            </button>
+
+            <IconButton
+              label={voiceOn ? 'Couper la lecture vocale' : 'Lire les réponses à voix haute'}
+              onClick={() => {
+                const next = !voiceOn;
+                setVoiceOn(next);
+                if (!next) voice.cancel();
+              }}
+              className={cn('h-8 w-8', voiceOn ? 'border border-ok/35 bg-ok/10 text-ok' : 'border border-line text-ink-3')}
+            >
+              {voiceOn ? <Volume2 className="size-3.5" /> : <VolumeX className="size-3.5" />}
+            </IconButton>
+
+            <div className="ml-auto flex items-center gap-2">
+              <CooModelPicker compact initial={assignments} />
+              <span className="hidden items-center gap-1 text-[10px] text-ink-4 sm:flex">
+                <kbd className="rounded border border-line-strong bg-surface-1 px-1 font-mono">↵</kbd>
+                <CornerDownLeft className="size-3" />
+              </span>
+              <Button type="submit" variant="primary" size="sm" disabled={busy || !draft.trim()} className="h-8">
+                <Send className="size-3.5" />
+                Envoyer
+              </Button>
+            </div>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { getDb, schema } from '@/db/client';
 import { getCurrentUser, publicUser } from '@/auth/session';
 import { Sidebar } from '@/components/layout/sidebar';
 import { GlobalCoo } from '@/components/coo/global-coo';
+import { getAssignmentsView } from '@/ai/assignments-view';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       : Promise.resolve([] as Array<{ id: string }>),
   ]);
 
+  // The COO's model assignment + gateway health, read once for the shell so the
+  // drawer can tell the truth about which model will answer — before any click.
+  const assignments = await getAssignmentsView(user.organizationId).catch(() => null);
+
   const activeProjectIds = new Set(activeRuns.map((r) => r.projectId));
   const attention = {
     approvals: pendingApprovals.length,
@@ -87,11 +92,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         }))}
         pendingApprovals={pendingApprovals.length}
         activeRuns={activeProjectIds.size}
+        failedRuns={failedRuns.length}
+        blockedTasks={blockedTasks.length}
       />
-      <div className="min-w-0 flex-1">{children}</div>
+      <main id="main" className="min-w-0 flex-1">
+        {children}
+      </main>
       <GlobalCoo
         projects={projects.map((p) => ({ id: p.id, name: p.name }))}
         attention={attention}
+        assignments={assignments}
       />
     </div>
   );

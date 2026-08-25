@@ -2,13 +2,14 @@ import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { Badge, Card } from '@/components/ui/primitives';
 import { toneFor } from '@/lib/ui';
+import { Settings } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { env } from '@/lib/env';
 import { liveCommandCount } from '@/engine/command-runner';
 import { browserCapability } from '@/tools/browser-tools';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Settings' };
+export const metadata = { title: 'Réglages' };
 
 /**
  * Platform settings and an honest capability report.
@@ -85,7 +86,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-5 lg:p-7">
-      <PageHeader title="Settings" subtitle="Platform configuration and an honest report of what this installation can actually do." />
+      <PageHeader icon={<Settings className="size-4" />} title="Réglages" subtitle="Configuration de la plateforme et rapport honnête de ce que cette installation sait réellement faire." />
 
       <Card title="Account">
         <dl className="grid gap-3 p-4 text-[12px] sm:grid-cols-2">

@@ -263,3 +263,38 @@ Postgres advisory-lock claim.
 ### L-05 · Deployment and web-search adapters absent
 `deploy` records an explicit error rather than faking success; `web_search` returns a
 clear "not configured" failure.
+
+---
+
+## B-16 — Le micro du drawer COO ne réagissait pas au clic (résolu)
+
+**Symptôme.** « Je ne peux pas encore cliquer pour parler. »
+
+**Cause.** `onPointerDown` démarrait la reconnaissance et `onPointerUp` la coupait :
+un clic simple ne laissait rien entendre. De plus `onerror` ne faisait que
+`setListening(false)` — un refus de permission, un micro absent ou une absence de
+réseau produisaient exactement le même silence qu'un succès.
+
+**Correction.** `src/lib/use-voice.ts` : bascule explicite `start/stop`, sonde
+`getUserMedia` avant de démarrer pour nommer le refus (`NotAllowedError`,
+`NotFoundError`…), table de messages français par code d'erreur, transcription
+intermédiaire visible, bouton « Réessayer ». Le Mode Voiture utilise le même hook.
+
+**Vérification.** `npm run verify` (typecheck, lint, 94 tests, build). Le parcours
+micro lui-même dépend du navigateur de l'utilisateur (aucun navigateur dans le
+bac à sable) : vérifié par le code et les contrats d'événements, pas par capture.
+
+## B-17 — Le COO ne pouvait pas utiliser un modèle choisi (résolu)
+
+**Symptôme.** « Permet qu'on puisse assigner un modèle au COO. »
+
+**Cause.** Aucun lien agent → modèle n'existait : seul le routage par politique
+décidait, et sans passerelle active le COO renvoyait un message générique.
+
+**Correction.** Table `agent_model_bindings`, module `src/ai/bindings.ts`,
+API `/api/gateway/bindings`, contrôles d'assignation (drawer COO + page Modèles),
+diagnostic précis.
+
+**Vérification.** 8 tests d'intégration + test de bout en bout réel avec une
+passerelle locale factice : `stub-coder-13b` assigné → réponse du COO
+`mode:"model"` produite par ce modèle.

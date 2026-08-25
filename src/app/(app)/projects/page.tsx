@@ -3,12 +3,13 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { Badge, Card, EmptyState } from '@/components/ui/primitives';
+import { FolderKanban } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { timeAgo, toneFor } from '@/lib/ui';
 import { NewProjectDialog } from '@/components/work/new-project-dialog';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Projects' };
+export const metadata = { title: 'Projets' };
 
 export default async function ProjectsPage() {
   const user = await getCurrentUser();
@@ -53,8 +54,9 @@ export default async function ProjectsPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-5 lg:p-7">
       <PageHeader
-        title="Projects"
-        subtitle="Each project is a persistent workspace with its own repository, memory, files, tasks and runs. Projects are isolated server-side."
+        icon={<FolderKanban className="size-4" />}
+        title="Projets"
+        subtitle="Chaque projet est un espace persistant : dépôt, mémoire, fichiers, tâches et runs. L’isolation est appliquée côté serveur."
         action={<NewProjectDialog />}
       />
 

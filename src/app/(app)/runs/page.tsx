@@ -4,6 +4,7 @@ import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { Badge, Card, EmptyState } from '@/components/ui/primitives';
 import { toneFor, timeAgo, durationLabel, formatTokens, formatCost } from '@/lib/ui';
+import { Activity } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 
 export const dynamic = 'force-dynamic';
@@ -37,8 +38,9 @@ export default async function RunsPage() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-5 lg:p-7">
       <PageHeader
+        icon={<Activity className="size-4" />}
         title="Runs"
-        subtitle="Every autonomous run across every project. Runs are durable — they survive a browser refresh and a server restart."
+        subtitle="Tous les runs autonomes, tous projets confondus. Les runs sont durables : ils survivent à un rafraîchissement et à un redémarrage."
       />
 
       {runs.length === 0 ? (

@@ -2,11 +2,14 @@ import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { Badge, Card, EmptyState, Stat } from '@/components/ui/primitives';
 import { toneFor, formatCost, formatTokens, timeAgo } from '@/lib/ui';
+import { Cpu } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { AgentModelAssignments } from '@/components/models/agent-model-assignments';
 import { ProviderHealth } from '@/components/work/provider-health';
 import { ROUTING_POLICIES } from '@/ai/router';
 import { usageSummary } from '@/ai/router';
 import { GatewayAdmin } from '@/components/models/gateway-admin';
+import { getAssignmentsView } from '@/ai/assignments-view';
 import { serializeGateway } from '@/app/api/gateway/providers/route';
 
 export const dynamic = 'force-dynamic';
@@ -35,14 +38,23 @@ export default async function ModelsPage() {
   const online = providers.filter((p) => p.healthStatus === 'online').length;
   const isAdmin = user.role === 'owner' || user.role === 'admin';
   const gateway = isAdmin ? await serializeGateway(db) : null;
+  const assignmentsView = await getAssignmentsView(user.organizationId);
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-5 lg:p-7">
       <PageHeader
-        title="Models"
-        subtitle="Provider configuration, routing policies and usage. Adding a provider is a data change, not a deploy."
+        title="Modèles"
+        subtitle="Passerelle, assignation par agent, politiques de routage et usage réel. Ajouter un provider est un changement de données, pas un déploiement."
+        icon={<Cpu className="size-4" />}
         action={<ProviderHealth />}
       />
+
+      <Card
+        title="Modèle assigné au COO et aux agents"
+        description="Épinglez un modèle précis par agent, ou laissez la politique de routage décider à chaque appel."
+      >
+        <AgentModelAssignments initial={assignmentsView} />
+      </Card>
 
       {isAdmin && gateway ? (
         <Card title="Gestion de la passerelle" description="Ajoutez llama.cpp / Ollama / un provider hébergé, découvrez leurs modèles, gérez clés et politiques.">
@@ -53,13 +65,13 @@ export default async function ModelsPage() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <Stat label="Providers" value={providers.length} />
-        <Stat label="Online" value={online} tone={online > 0 ? 'ok' : 'idle'} />
-        <Stat label="Model calls" value={usage.totalCalls} />
+        <Stat label="Passerelles" value={providers.length} />
+        <Stat label="En ligne" value={online} tone={online > 0 ? 'ok' : 'idle'} />
+        <Stat label="Appels modèle" value={usage.totalCalls} />
         <Stat
-          label="Total cost"
+          label="Coût total"
           value={formatCost(usage.totalCostUsd)}
-          hint={`${formatTokens(usage.totalInputTokens + usage.totalOutputTokens)} tokens`}
+          hint={`${formatTokens(usage.totalInputTokens + usage.totalOutputTokens)} jetons`}
         />
       </div>
 
@@ -67,8 +79,8 @@ export default async function ModelsPage() {
         <Card>
           <div className="p-6">
             <EmptyState
-              title="No providers registered"
-              description="Run `npm run db:seed` to register the default providers, or set LOCAL_MODEL_BASE_URL to point at a local OpenAI-compatible endpoint such as http://127.0.0.1:8080/v1."
+              title="Aucune passerelle enregistrée"
+              description="Ajoutez llama.cpp ou Ollama ci-dessus, lancez « npm run db:seed » pour les providers par défaut, ou pointez LOCAL_MODEL_BASE_URL vers un endpoint OpenAI-compatible local (ex. http://127.0.0.1:8080/v1)."
             />
           </div>
         </Card>
@@ -183,8 +195,8 @@ export default async function ModelsPage() {
       )}
 
       <Card
-        title="Routing policies"
-        description="The router resolves a policy to a model at runtime, skipping providers that are offline and falling back according to policy. LOCAL_ONLY never falls back to a hosted provider."
+        title="Politiques de routage"
+        description="Le routeur résout une politique en modèle à l’exécution, ignore les passerelles hors ligne et applique le repli prévu. LOCAL_ONLY ne bascule jamais vers un provider hébergé."
       >
         <div className="grid gap-2 p-4 sm:grid-cols-2 lg:grid-cols-4">
           {ROUTING_POLICIES.map((policy) => {
@@ -202,10 +214,10 @@ export default async function ModelsPage() {
         </div>
       </Card>
 
-      <Card title="Usage by model" description="Recorded from real provider responses">
+      <Card title="Usage par modèle" description="Enregistré à partir des réponses réelles des providers">
         {usage.byModel.length === 0 ? (
           <div className="p-4">
-            <EmptyState compact title="No usage recorded yet" description="Local models record execution time with zero cost." />
+            <EmptyState compact title="Aucun usage enregistré" description="Les modèles locaux enregistrent le temps d’exécution, à coût nul." />
           </div>
         ) : (
           <ul className="divide-y divide-line">

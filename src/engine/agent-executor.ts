@@ -3,6 +3,7 @@ import path from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db/client';
 import { callModel } from '@/ai/router';
+import { applyBinding } from '@/ai/bindings';
 import { AppError } from '@/lib/errors';
 import { createLogger } from '@/lib/logger';
 import type { ChatMessage } from '@/ai/provider';
@@ -247,8 +248,15 @@ async function runWithModel(
       .set({ status: 'working', stepsUsed: step, lastAction: `Step ${step + 1} of ${maxSteps}` })
       .where(eq(schema.agentInstances.id, agentInstanceId));
 
+    // Operator assignment (Models → Agent models) overrides the default policy.
+    const bound = await applyBinding(
+      { policy: definition.modelPolicy as never },
+      { agentKey: definition.key, projectId: input.projectId },
+    );
+
     const response = await callModel({
-      policy: definition.modelPolicy as never,
+      policy: bound.policy,
+      ...(bound.manualModelId ? { manualModelId: bound.manualModelId } : {}),
       messages,
       tools: assembled.tools,
       temperature: definition.temperature ? Number.parseFloat(definition.temperature) : 0.2,

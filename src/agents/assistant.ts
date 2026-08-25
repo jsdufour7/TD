@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db/client';
 import { callModel } from '@/ai/router';
+import { applyBinding } from '@/ai/bindings';
+import { diagnoseGateway } from '@/ai/diagnostics';
 import { AppError } from '@/lib/errors';
 import { getAgentDefinition } from './catalog';
 import type { ChatMessage } from '@/ai/provider';
@@ -218,7 +220,12 @@ export async function replyAsAgent(input: {
   projectId: string;
   userText: string;
   history: Array<{ role: string; authorName: string | null; content: string }>;
-}): Promise<{ content: string; mode: 'model' | 'deterministic' | 'unavailable'; providerKey?: string }> {
+}): Promise<{
+  content: string;
+  mode: 'model' | 'deterministic' | 'unavailable';
+  providerKey?: string;
+  modelKey?: string;
+}> {
   const brief = await gatherBrief(input.projectId);
   const definition = getAgentDefinition(input.agentKey);
   const role = definition?.name ?? input.agentKey;
@@ -251,14 +258,29 @@ export async function replyAsAgent(input: {
       { role: 'user', content: input.userText },
     ];
 
+    // The operator's explicit assignment wins over the agent's default policy.
+    const bound = await applyBinding(
+      { policy: (definition?.modelPolicy as never) ?? 'BALANCED' },
+      { agentKey: input.agentKey, projectId: input.projectId },
+    );
+
     const result = await callModel({
-      policy: (definition?.modelPolicy as never) ?? 'BALANCED',
+      policy: bound.policy,
+      ...(bound.manualModelId ? { manualModelId: bound.manualModelId } : {}),
       messages,
       maxTokens: 800,
+      projectId: input.projectId,
     });
 
     const content = (result.content ?? '').trim();
-    if (content) return { content, mode: 'model', providerKey: result.providerKey };
+    if (content) {
+      return {
+        content,
+        mode: 'model',
+        providerKey: result.providerKey,
+        modelKey: result.modelKey,
+      };
+    }
   } catch (error) {
     // Provider absent or failed — fall through to deterministic.
     if (!(error instanceof AppError)) throw error;
@@ -266,11 +288,37 @@ export async function replyAsAgent(input: {
 
   if (deterministic) return { content: deterministic, mode: 'deterministic' };
 
-  return {
-    content:
-      `Je n'ai pas de passerelle modèle joignable et cette question demande du raisonnement libre. ` +
-      `Configurez-en une dans Models → Gestion de la passerelle (llama.cpp / Ollama). ` +
-      `En attendant, essayez : « état », « échecs », « bloqué », « coût » ou « mémoire ».`,
-    mode: 'unavailable',
-  };
+  return { content: await unavailableReply(input.agentKey, input.projectId), mode: 'unavailable' };
+}
+
+/**
+ * Honest, specific "I cannot reason right now" reply.
+ *
+ * Names the model the operator assigned (if any), the provider that was tried,
+ * the real error, and the one action that unblocks it. Never a generic
+ * "something went wrong".
+ */
+async function unavailableReply(agentKey: string, projectId: string): Promise<string> {
+  const [binding, diagnosis] = await Promise.all([
+    applyBinding({ policy: 'BALANCED' }, { agentKey, projectId }),
+    diagnoseGateway(),
+  ]);
+
+  const lines: string[] = ['Je ne peux pas raisonner librement pour le moment : aucun modèle joignable.'];
+
+  if (binding.binding?.model) {
+    const m = binding.binding.model;
+    lines.push(
+      `Modèle assigné à cet agent : ${m.displayName} (${m.providerKey} · ${m.modelKey}). ` +
+        (m.providerEnabled ? `État du provider : ${m.providerHealth}.` : 'Son provider est désactivé.'),
+    );
+  } else if (binding.binding) {
+    lines.push(`Cet agent suit la politique de routage ${binding.binding.policy} — aucun modèle précis n’est assigné.`);
+  }
+
+  lines.push(`${diagnosis.headline}. ${diagnosis.detail}`);
+  lines.push('Action : Models → Gestion de la passerelle → Tester la connexion, puis assignez un modèle au COO.');
+  lines.push('En attendant je réponds depuis les données réelles : « état », « échecs », « bloqué », « coût », « mémoire ».');
+
+  return lines.join('\n');
 }

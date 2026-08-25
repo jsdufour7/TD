@@ -9,6 +9,7 @@ import {
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
+import { organizations } from './identity';
 
 /**
  * Multi-model gateway (§21, §22, §23, §42).
@@ -118,6 +119,36 @@ export const modelRoutes = pgTable(
   (t) => [index('routes_policy_idx').on(t.policy, t.priority)],
 );
 
+/**
+ * Which model an agent actually uses.
+ *
+ * Routing policies answer "what kind of model is appropriate"; a binding answers
+ * "which exact model did the operator choose for this agent". `agentKey` is an
+ * agent definition key (`coo`, `fullstack-engineer`, …) or `*` for the
+ * organisation-wide default. A NULL `modelId` means "no override — follow the
+ * routing policy", so assigning is always reversible and never required.
+ *
+ * Resolution order for a call: exact agent key → `*` → routing policy.
+ */
+export const agentModelBindings = pgTable(
+  'agent_model_bindings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    organizationId: uuid('organization_id')
+      .notNull()
+      .references(() => organizations.id, { onDelete: 'cascade' }),
+    /** Agent definition key, or '*' for the organisation default. */
+    agentKey: text('agent_key').notNull(),
+    /** NULL = follow `policy` instead of pinning a model. */
+    modelId: uuid('model_id').references(() => modelDefinitions.id, { onDelete: 'set null' }),
+    /** Routing policy applied when modelId is NULL. */
+    policy: text('policy').notNull().default('BALANCED'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('agent_model_bindings_org_agent_idx').on(t.organizationId, t.agentKey)],
+);
+
 /** Per-call usage and cost (§42). Local models record time with zero cost. */
 export const modelUsages = pgTable(
   'model_usages',
@@ -171,4 +202,5 @@ export type ModelProvider = typeof modelProviders.$inferSelect;
 export type ModelDefinition = typeof modelDefinitions.$inferSelect;
 export type ModelRoute = typeof modelRoutes.$inferSelect;
 export type ModelUsage = typeof modelUsages.$inferSelect;
+export type AgentModelBinding = typeof agentModelBindings.$inferSelect;
 export type Integration = typeof integrations.$inferSelect;

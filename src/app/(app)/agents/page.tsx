@@ -4,6 +4,7 @@ import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { Badge, Card, EmptyState } from '@/components/ui/primitives';
 import { toneFor, timeAgo, durationLabel } from '@/lib/ui';
+import { Bot } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 
 export const dynamic = 'force-dynamic';
@@ -51,8 +52,9 @@ export default async function AgentsPage() {
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-5 lg:p-7">
       <PageHeader
+        icon={<Bot className="size-4" />}
         title="Agents"
-        subtitle="Specialist roles with distinct tools, permissions and model policies. The COO instantiates the smallest competent team for each objective — not every agent for every task."
+        subtitle="Rôles spécialisés, chacun avec ses outils, ses permissions et sa politique de modèle. Le COO instancie la plus petite équipe compétente pour chaque objectif."
       />
 
       {active.length > 0 ? (

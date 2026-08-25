@@ -2,31 +2,104 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Button, Field, inputClass } from '@/components/ui/primitives';
-import { Logo } from '@/components/brand/logo';
+import { ArrowRight, Bot, Download, Lock, ShieldCheck, Sparkles } from 'lucide-react';
+import { Button, Field, Input } from '@/components/ui/primitives';
+import { LogoMark } from '@/components/brand/logo';
 
 /**
  * Sign in.
  *
  * The bootstrap administrator is created on first boot from AI_CORE_BOOTSTRAP_*.
- * The hint below is shown only in development, and only names the email — never
- * a password.
- */
-/**
- * No `useSearchParams()` here on purpose.
  *
- * `useSearchParams` forces a Suspense boundary during static prerendering, and
- * the server/client pair can disagree about its value — one of the documented
- * causes of "Hydration failed because the server rendered HTML didn't match the
- * client". The redirect target is only needed inside the submit handler, which
- * runs after mount, so it is read from `window.location.search` there instead of
- * during render. That removes the mismatch source rather than papering over it.
+ * No `useSearchParams()` here on purpose: it forces a Suspense boundary during
+ * static prerendering and the server/client pair can disagree about its value —
+ * one of the documented causes of hydration mismatch. The redirect target is
+ * only needed inside the submit handler (after mount), so it is read from
+ * `window.location.search` there instead of during render.
  */
 export default function LoginPage() {
   return (
-    <main className="flex min-h-dvh items-center justify-center bg-surface-0 p-6 bg-grid">
-      <LoginCard />
+    <main className="grid min-h-dvh grid-cols-1 lg:grid-cols-[1.05fr_1fr]">
+      <BrandPanel />
+      <div className="flex items-center justify-center bg-surface-0 p-6 sm:p-10">
+        <LoginCard />
+      </div>
     </main>
+  );
+}
+
+const PILLARS = [
+  {
+    icon: Sparkles,
+    title: 'Vous parlez, le COO orchestre',
+    body: 'Un objectif en langage naturel devient un plan versionné, des tâches, des agents spécialisés et une vérification.',
+  },
+  {
+    icon: Bot,
+    title: '13 agents spécialisés',
+    body: 'Architecture, code, tests, revue, sécurité, produit — chacun avec ses outils, ses permissions et son budget.',
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Local d’abord, vérifié toujours',
+    body: 'llama.cpp / Ollama en priorité, aucune donnée ne sort sans vous. Rien n’est « terminé » sans preuve.',
+  },
+];
+
+function BrandPanel() {
+  return (
+    <section className="relative hidden flex-col justify-between overflow-hidden border-r border-line bg-surface-1 p-10 lg:flex">
+      <div className="bg-grid pointer-events-none absolute inset-0 opacity-60" aria-hidden="true" />
+      <div
+        className="pointer-events-none absolute -top-32 -left-24 size-[26rem] rounded-full opacity-[0.18] blur-3xl"
+        style={{ background: 'var(--color-accent)' }}
+        aria-hidden="true"
+      />
+
+      <div className="relative">
+        <div className="flex items-center gap-3">
+          <LogoMark className="size-9 text-ink-1" />
+          <div className="flex items-baseline gap-2 leading-none">
+            <span className="text-lg font-semibold tracking-tight text-ink-1">TwoDots</span>
+            <span className="h-4 w-px self-center bg-line-strong" aria-hidden="true" />
+            <span className="text-lg font-semibold tracking-tight">
+              <span className="text-accent">AI</span>
+              <span className="text-ink-1"> Core</span>
+            </span>
+          </div>
+        </div>
+
+        <h1 className="mt-12 max-w-md text-[2rem] leading-[1.15] font-semibold tracking-tight text-ink-1 text-balance">
+          Le système d’exploitation du travail,
+          <span className="text-accent"> piloté par votre COO.</span>
+        </h1>
+        <p className="mt-3 max-w-md text-[13.5px] leading-relaxed text-ink-3">
+          Vous donnez l’intention. Le COO comprend, planifie, délègue, exécute, vérifie, replanifie et vous rapporte —
+          avec l’état réel du projet, jamais une simulation.
+        </p>
+      </div>
+
+      <ul className="relative mt-10 space-y-4">
+        {PILLARS.map((pillar) => {
+          const Icon = pillar.icon;
+          return (
+            <li key={pillar.title} className="flex items-start gap-3">
+              <span className="grid size-8 shrink-0 place-items-center rounded-md border border-line bg-surface-2 text-accent">
+                <Icon className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <p className="text-[13px] font-medium text-ink-1">{pillar.title}</p>
+                <p className="mt-0.5 text-[12px] leading-relaxed text-ink-3">{pillar.body}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <p className="relative mt-10 text-[11px] text-ink-4">
+        Sessions hachées côté serveur · passerelle modèle configurable · aucune donnée transmise sans votre accord.
+      </p>
+    </section>
   );
 }
 
@@ -49,20 +122,18 @@ function LoginCard() {
       });
       const body = (await response.json()) as { error?: { message?: string } };
       if (!response.ok) {
-        setError(body.error?.message ?? 'Sign in failed');
+        setError(body.error?.message ?? 'Connexion refusée');
         return;
       }
-      // `replace` already fetches a fresh RSC payload for the destination, so
-      // the session-aware layout re-renders with the new cookie. Adding a
-      // `router.refresh()` here would re-fetch and ABORT that in-flight render;
+      // `replace` already fetches a fresh RSC payload for the destination, so the
+      // session-aware layout re-renders with the new cookie. Adding a
+      // `router.refresh()` here would re-fetch AND ABORT that in-flight render;
       // React's dev profiler then measures the aborted AppLayout with an
       // -Infinity end time and throws "cannot have a negative time stamp".
-      // Read at submit time (after mount), never during render — see the note
-      // on LoginPage above.
       const redirectTo = new URLSearchParams(window.location.search).get('redirect');
       router.replace(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/home');
     } catch {
-      setError('Could not reach the server. Is AI Core running?');
+      setError('Serveur injoignable. AI Core tourne-t-il ?');
     } finally {
       setSubmitting(false);
     }
@@ -70,30 +141,33 @@ function LoginCard() {
 
   return (
     <div className="w-full max-w-sm">
-      <div className="mb-8">
-        <Logo />
-        <p className="mt-2 text-xs text-ink-3">
-          L’intelligence <span className="font-medium text-accent">au cœur</span> de l’écosystème.
-        </p>
+      <div className="mb-7 lg:hidden">
+        <div className="flex items-center gap-2.5">
+          <LogoMark className="size-8 text-ink-1" />
+          <p className="text-base font-semibold tracking-tight">
+            <span className="text-accent">AI</span> Core
+          </p>
+        </div>
       </div>
 
-      <form onSubmit={submit} className="space-y-4 rounded-lg border border-line bg-surface-1 p-5">
-        <Field label="Email" required>
-          <input
+      <h2 className="text-xl font-semibold tracking-tight text-ink-1">Connexion</h2>
+      <p className="mt-1 text-[13px] text-ink-3">Accédez à votre espace de pilotage.</p>
+
+      <form onSubmit={submit} className="mt-6 space-y-4">
+        <Field label="Courriel" required>
+          <Input
             type="email"
             autoComplete="username"
-            className={inputClass}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
           />
         </Field>
 
-        <Field label="Password" required>
-          <input
+        <Field label="Mot de passe" required>
+          <Input
             type="password"
             autoComplete="current-password"
-            className={inputClass}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -101,40 +175,37 @@ function LoginCard() {
         </Field>
 
         {error ? (
-          <p role="alert" className="rounded border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">
+          <p role="alert" className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-xs leading-relaxed text-danger">
             {error}
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" size="md" className="w-full" loading={submitting}>
-          Sign in
+        <Button type="submit" variant="primary" size="lg" className="w-full" loading={submitting}>
+          Entrer
+          <ArrowRight className="size-4" />
         </Button>
       </form>
 
       {/*
-        Relative link on purpose. The live preview is served from a host whose
-        id changes between sessions, so an absolute URL handed out in chat goes
+        Relative link on purpose: the live preview is served from a host whose id
+        changes between sessions, so an absolute URL handed out in chat goes
         stale. A relative href resolves against whatever origin the browser is
-        actually on, so this keeps working.
-
-        Placed on the login page because that page renders without a session,
-        which matters when the preview iframe blocks third-party cookies.
+        actually on. Placed on the login page because that page renders without a
+        session, which matters when the preview iframe blocks third-party cookies.
       */}
       <a
         href="/download/twodots-ai-core.zip"
         download
-        className="mt-3 flex items-center justify-center gap-2 rounded-md border border-line bg-surface-2 px-3 py-2 text-[12px] text-ink-2 transition-colors hover:border-accent/40 hover:text-ink-1"
+        className="mt-3 flex items-center justify-center gap-2 rounded-md border border-line bg-surface-1 px-3 py-2.5 text-[12px] text-ink-2 transition-colors hover:border-accent/40 hover:text-ink-1"
       >
-        <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.7" aria-hidden="true">
-          <path d="M12 3v12M7 11l5 5 5-5M4 21h16" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <Download className="size-3.5" />
         Télécharger le code source (.zip)
       </a>
 
-      <p className="mt-4 text-center text-[11px] text-ink-4">
-        Sessions are stored as hashed tokens. Credentials never leave the server.
+      <p className="mt-5 flex items-start gap-2 text-[11px] leading-relaxed text-ink-4">
+        <Lock className="mt-0.5 size-3.5 shrink-0" />
+        Les sessions sont stockées sous forme de jetons hachés. Les identifiants ne quittent jamais le serveur.
       </p>
     </div>
   );
 }
-

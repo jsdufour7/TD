@@ -82,3 +82,42 @@ build 44 routes.
 ### Next
 P0-1 in `BACKLOG.md`: exercise the LLM agent loop against a real provider, which is the
 only thing standing between the current state and the §52 release gate.
+
+---
+
+## Cycle 5 — Assignation de modèle par agent, voix cliquable, refonte UI/UX globale
+
+### Ce qui a été corrigé
+* **Micro inutilisable (clic-pour-parler).** Le bouton du drawer COO était en
+  push-to-talk (`onPointerDown`/`onPointerUp`) : un clic normal démarrait puis
+  coupait immédiatement la reconnaissance, et toute erreur (`not-allowed`,
+  `audio-capture`, `no-speech`, `network`) était avalée. Remplacé par un vrai
+  toggle cliquable (`src/lib/use-voice.ts`) qui :
+  sonde d'abord `getUserMedia` pour nommer la raison exacte du refus, affiche la
+  transcription intermédiaire dans le champ, et propose l'action qui débloque.
+  Même hook réutilisé par le Mode Voiture (boucle mains libres + bip).
+* **COO sans modèle assignable.** Nouvelle table `agent_model_bindings`
+  (organisation × agent → modèle/politique), migration `0003`, module
+  `src/ai/bindings.ts`, API `GET|PUT /api/gateway/bindings`. Le COO, le planner
+  et l'exécuteur d'agents appliquent l'assignation (`MANUAL` + `manualModelId`)
+  avant tout appel. Un contrôle d'assignation est présent dans le drawer COO et
+  un tableau complet dans Modèles.
+* **Message d'échec générique.** `src/ai/diagnostics.ts` nomme désormais le
+  modèle assigné, la passerelle, l'URL, l'erreur réelle et l'action à faire.
+
+### UI/UX
+Refonte du système de design : nouvelles échelles de surfaces/encres, accent
+indigo, ombres en trois niveaux, animations, thème clair/sombre persistant
+(cookie + localStorage), police Geist. Sidebar groupée par intention et
+réduisible, barres de tabs de projet iconisées, `PageHeader` unifié, primitives
+étendues (Notice, Switch, Tabs, Modal, Kbd, Progress, Avatar, Select/Input),
+icônes Lucide partout, pages passées en français, Mission Control réécrit,
+page de connexion en deux panneaux, drawer COO repensé (bulles, suggestions,
+indicateur de réflexion, puce modèle + santé passerelle).
+
+### Vérification
+`npm run verify` → typecheck 0 erreur · lint 0 erreur · 94/94 tests · build 45
+routes. Bout en bout réel : passerelle locale factice (llama.cpp-like) enregistrée
+→ 2 modèles découverts → `stub-coder-13b` assigné au COO → réponse du COO
+`mode: "model"` signée par ce modèle (et non par le repli `BALANCED`), puis
+fournisseur supprimé et diagnostic d'indisponibilité vérifié.

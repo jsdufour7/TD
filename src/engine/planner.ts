@@ -1,6 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db/client';
 import { callModel } from '@/ai/router';
+import { applyBinding } from '@/ai/bindings';
 import type { ChatMessage } from '@/ai/provider';
 import { invokeTool } from '@/tools';
 import { emitAndNotify } from './events';
@@ -187,8 +188,14 @@ async function planWithModel(
   for (let step = 0; step < 10; step += 1) {
     if (input.isCancelled()) break;
 
+    const bound = await applyBinding(
+      { policy: 'BEST' as const },
+      { agentKey: 'coo', projectId: input.projectId },
+    );
+
     const response = await callModel({
-      policy: 'BEST',
+      policy: bound.policy,
+      ...(bound.manualModelId ? { manualModelId: bound.manualModelId } : {}),
       messages,
       tools: [
         {

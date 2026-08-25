@@ -1,11 +1,12 @@
 import { desc, eq, inArray } from 'drizzle-orm';
 import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
+import { ShieldCheck } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { ApprovalQueue } from '@/components/work/approval-queue';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Approvals' };
+export const metadata = { title: 'Approbations' };
 
 export default async function ApprovalsPage({
   searchParams,
@@ -36,8 +37,9 @@ export default async function ApprovalsPage({
   return (
     <div className="mx-auto max-w-4xl space-y-4 p-5 lg:p-7">
       <PageHeader
-        title="Approvals"
-        subtitle="High-impact operations across every project. Destructive deletions, production deployments, git pushes, secret changes and dangerous commands block here until you decide."
+        icon={<ShieldCheck className="size-4" />}
+        title="Approbations"
+        subtitle="Opérations à fort impact, tous projets confondus. Suppressions destructives, déploiements en production, git push, secrets et commandes dangereuses bloquent ici jusqu’à votre décision."
       />
       <ApprovalQueue
         highlight={highlight ?? null}

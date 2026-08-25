@@ -5,6 +5,7 @@ import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { requireUser } from '@/auth/guards';
 import { DrivingMode } from '@/components/coo/driving-mode';
+import { Car } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 
 export const dynamic = 'force-dynamic';
@@ -32,6 +33,7 @@ export default async function DrivePage({ searchParams }: { searchParams: Promis
   return (
     <div className="space-y-4 p-4">
       <PageHeader
+        icon={<Car className="size-4" />}
         title="Mode Voiture"
         subtitle="Mains libres : parlez, le COO répond à voix haute. « Stop » ou « Attends » coupe net et vous redonne la parole."
         action={

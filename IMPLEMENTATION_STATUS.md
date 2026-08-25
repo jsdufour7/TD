@@ -121,3 +121,23 @@ npm run db:seed      # agent catalog, providers, routes, integrations
 npm run verify       # typecheck + lint + test + build
 npm run dev          # http://localhost:3000  (admin@twodots.local / changeme-please)
 ```
+
+---
+
+## Cycle 5 — ajout (assignation de modèle, voix, UI/UX)
+
+| Capacité | État | Preuve |
+| --- | --- | --- |
+| Assigner un modèle au COO (et à tout agent) | Fait | `agent_model_bindings` + migration 0003 ; `PUT /api/gateway/bindings` ; 8 tests `tests/integration/model-bindings.test.ts` |
+| L'assignation prime sur la politique de routage | Fait | `applyBinding()` utilisé par `assistant.ts`, `planner.ts`, `agent-executor.ts` ; vérifié en réel : réponse `mode:"model"` du modèle épinglé |
+| Repli honnête si le modèle épinglé disparaît | Fait | `ON DELETE SET NULL` + test « survives the deletion of the pinned model » |
+| Diagnostic de passerelle actionnable | Fait | `src/ai/diagnostics.ts` (raison, URL, erreur réelle, action) |
+| Voix : clic-pour-parler + erreurs nommées | Fait | `src/lib/use-voice.ts` (`useSpeechInput`, `useSpeechOutput`, `playCue`) |
+| Thème clair/sombre persistant | Fait | cookie `ai_core_theme` lu côté serveur + `useStoredString` |
+| Système de composants étendu | Fait | `src/components/ui/primitives.tsx` (Notice, Switch, Tabs, Modal, Kbd, Progress, Avatar…) |
+
+### Limite connue (inchangée)
+Le serveur qui fait tourner AI Core doit pouvoir joindre le fournisseur de
+modèles. Un llama.cpp qui tourne sur le poste de l'utilisateur n'est pas
+joignable depuis un aperçu hébergé : dans ce cas le COO répond depuis les données
+réelles du projet et le dit explicitement.

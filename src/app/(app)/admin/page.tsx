@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/auth/session';
+import { Users } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
 import { UserAdmin } from '@/components/admin/user-admin';
 import { getDb, schema } from '@/db/client';
@@ -49,6 +50,7 @@ export default async function AdminPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-5 p-5 lg:p-7">
       <PageHeader
+        icon={<Users className="size-4" />}
         title="Administration"
         subtitle="Gérez les utilisateurs de l'organisation : créer, modifier courriel / nom / rôle, activer ou désactiver, définir un mot de passe."
       />

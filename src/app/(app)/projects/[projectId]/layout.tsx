@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db/client';
 import { requireProject } from '@/auth/guards';
 import { ProjectTabs } from '@/components/layout/project-tabs';
+import { ProjectHeaderActions } from '@/components/layout/project-header-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,35 +57,38 @@ export default async function ProjectLayout({
             <div className="flex items-center gap-2">
               <h1 className="truncate text-base font-semibold tracking-tight text-ink-1">{project.name}</h1>
               {activeRuns.length > 0 ? (
-                <span className="inline-flex items-center gap-1.5 rounded border border-accent/25 bg-accent/15 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-accent uppercase">
-                  <span className="size-1.5 rounded-full bg-accent animate-pulse-dot" />
-                  running
+                <span className="inline-flex items-center gap-1.5 rounded border border-accent/28 bg-accent/14 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-accent uppercase">
+                  <span className="size-1.5 animate-pulse-dot rounded-full bg-accent" />
+                  en cours
                 </span>
               ) : null}
               {pendingApprovals.length > 0 ? (
                 <Link
                   href={`/projects/${projectId}/approvals`}
-                  className="rounded border border-warn/25 bg-warn/15 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-warn uppercase"
+                  className="rounded border border-warn/28 bg-warn/14 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-warn uppercase"
                 >
-                  {pendingApprovals.length} approval{pendingApprovals.length > 1 ? 's' : ''}
+                  {pendingApprovals.length} approbation{pendingApprovals.length > 1 ? 's' : ''}
                 </Link>
               ) : null}
               {project.isDemoData ? (
-                <span className="rounded border border-warn/25 bg-warn/15 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-warn uppercase">
-                  demo data
+                <span className="rounded border border-warn/28 bg-warn/14 px-1.5 py-0.5 font-mono text-[10px] tracking-wide text-warn uppercase">
+                  données de démo
                 </span>
               ) : null}
             </div>
             <p className="mt-0.5 truncate text-[11.5px] text-ink-3">
-              {project.description ?? project.businessPurpose ?? 'No description'}
+              {project.description ?? project.businessPurpose ?? 'Aucune description'}
               {repository[0] ? (
                 <span className="ml-2 font-mono text-ink-4">
                   · {repository[0].name} @ {repository[0].currentBranch ?? repository[0].defaultBranch}
                 </span>
               ) : (
-                <span className="ml-2 text-ink-4">· no repository connected</span>
+                <span className="ml-2 text-ink-4">· aucun dépôt connecté</span>
               )}
             </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <ProjectHeaderActions />
           </div>
         </div>
         <ProjectTabs projectId={projectId} />

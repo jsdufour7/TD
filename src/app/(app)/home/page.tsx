@@ -1,20 +1,31 @@
 import Link from 'next/link';
 import { and, desc, eq, inArray } from 'drizzle-orm';
+import {
+  Activity,
+  AlertTriangle,
+  Bot,
+  CheckCircle2,
+  Cpu,
+  FolderKanban,
+  Package,
+  ShieldCheck,
+  XCircle,
+} from 'lucide-react';
 import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
-import { Badge, Card, EmptyState, Stat, toneTextClass } from '@/components/ui/primitives';
+import { Badge, Button, Card, EmptyState, Stat, toneTextClass } from '@/components/ui/primitives';
 import { toneFor, timeAgo } from '@/lib/ui';
-import { PageHeader } from '@/components/layout/page-header';
+import { MissionHero } from '@/components/layout/mission-hero';
 
 export const dynamic = 'force-dynamic';
-export const metadata = { title: 'Home' };
+export const metadata = { title: 'Mission Control' };
 
 /**
- * Command center (§27).
+ * Mission Control (§27).
  *
  * Answers six questions, each with a real query: what projects exist, what is
  * running, who is working, what needs my attention, what failed recently, and
- * what was delivered. No decorative charts.
+ * what was delivered. No decorative charts — every number is a count.
  */
 export default async function HomePage() {
   const user = await getCurrentUser();
@@ -32,7 +43,7 @@ export default async function HomePage() {
   const hasProjects = projectIds.length > 0;
   const scope = <T,>(fallback: T[], query: () => Promise<T[]>) => (hasProjects ? query() : Promise.resolve(fallback));
 
-  const [runs, approvals, instances, events, artifacts, providers, definitions] = await Promise.all([
+  const [runs, approvals, instances, events, artifacts, providers, definitions, blockedTasks] = await Promise.all([
     scope([], () =>
       db
         .select()
@@ -79,6 +90,12 @@ export default async function HomePage() {
     ),
     db.select().from(schema.modelProviders),
     db.select().from(schema.agentDefinitions),
+    scope([], () =>
+      db
+        .select({ id: schema.tasks.id })
+        .from(schema.tasks)
+        .where(and(inArray(schema.tasks.projectId, projectIds), eq(schema.tasks.status, 'blocked'))),
+    ),
   ]);
 
   const definitionByKey = new Map(definitions.map((d) => [d.key, d]));
@@ -87,34 +104,32 @@ export default async function HomePage() {
   );
   const failures = runs.filter((r) => r.status === 'failed').slice(0, 5);
   const completed = runs.filter((r) => r.status === 'completed').slice(0, 5);
+  const online = providers.filter((p) => p.healthStatus === 'online').length;
 
   return (
     <div className="mx-auto max-w-7xl space-y-5 p-5 lg:p-7">
-      <PageHeader
-        title="Command Center"
-        subtitle="Live state across every project. Every figure below is a real query result."
-        action={
-          <Link
-            href="/projects"
-            className="inline-flex h-8 items-center rounded-md bg-accent px-3 text-xs font-medium text-accent-ink hover:bg-accent/90"
-          >
-            {projects.length === 0 ? 'Create your first project' : 'All projects'}
-          </Link>
-        }
+      <MissionHero
+        userName={user.name}
+        canWork={hasProjects}
+        attention={{
+          approvals: approvals.length,
+          failedRuns: failures.length,
+          blockedTasks: blockedTasks.length,
+        }}
       />
 
-      {projects.length === 0 ? (
+      {!hasProjects ? (
         <Card>
           <div className="p-6">
             <EmptyState
-              title="No projects yet"
-              description="A project is a persistent intelligence workspace: instructions, files, memory, conversations, runs and tasks. Create one to give AI Core something to work on."
+              icon={<FolderKanban className="size-5" />}
+              title="Aucun projet"
+              description="Un projet est un espace d’intelligence persistant : instructions, fichiers, mémoire, conversations, runs et tâches. Créez-en un pour donner du travail au COO."
               action={
-                <Link
-                  href="/projects"
-                  className="inline-flex h-8 items-center rounded-md bg-accent px-3 text-xs font-medium text-accent-ink"
-                >
-                  Create a project
+                <Link href="/projects">
+                  <Button variant="primary" size="md">
+                    Créer un projet
+                  </Button>
                 </Link>
               }
             />
@@ -123,20 +138,51 @@ export default async function HomePage() {
       ) : null}
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat label="Projects" value={projects.length} />
-        <Stat label="Active runs" value={activeRuns.length} tone={activeRuns.length > 0 ? 'accent' : 'idle'} />
-        <Stat label="Agents working" value={instances.length} tone={instances.length > 0 ? 'accent' : 'idle'} />
+        <Stat label="Projets" value={projects.length} icon={<FolderKanban className="size-3.5" />} />
         <Stat
-          label="Needs approval"
+          label="Runs actifs"
+          value={activeRuns.length}
+          tone={activeRuns.length > 0 ? 'accent' : 'idle'}
+          icon={<Activity className="size-3.5" />}
+        />
+        <Stat
+          label="Agents au travail"
+          value={instances.length}
+          tone={instances.length > 0 ? 'accent' : 'idle'}
+          icon={<Bot className="size-3.5" />}
+        />
+        <Stat
+          label="Approbations"
           value={approvals.length}
           tone={approvals.length > 0 ? 'warn' : 'idle'}
+          icon={<ShieldCheck className="size-3.5" />}
         />
-        <Stat label="Failures" value={failures.length} tone={failures.length > 0 ? 'danger' : 'idle'} />
-        <Stat label="Completed" value={runs.filter((r) => r.status === 'completed').length} tone="ok" />
+        <Stat
+          label="Échecs"
+          value={failures.length}
+          tone={failures.length > 0 ? 'danger' : 'idle'}
+          icon={<XCircle className="size-3.5" />}
+        />
+        <Stat
+          label="Terminés"
+          value={runs.filter((r) => r.status === 'completed').length}
+          tone="ok"
+          icon={<CheckCircle2 className="size-3.5" />}
+        />
       </div>
 
       {approvals.length > 0 ? (
-        <Card title="Requires your attention" description="Operations are blocked until you decide">
+        <Card
+          title="Nécessite votre décision"
+          description="Ces opérations sont bloquées tant que vous n’avez pas tranché"
+          action={
+            <Link href="/approvals">
+              <Button size="sm" variant="outline">
+                Tout voir
+              </Button>
+            </Link>
+          }
+        >
           <ul className="divide-y divide-line">
             {approvals.map((approval) => (
               <li key={approval.id}>
@@ -150,11 +196,11 @@ export default async function HomePage() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[13px] text-ink-1">{approval.title}</p>
                     <p className="truncate text-[11px] text-ink-4">
-                      {projectById.get(approval.projectId)?.name ?? 'Unknown'} · {approval.category} ·{' '}
+                      {projectById.get(approval.projectId)?.name ?? 'Inconnu'} · {approval.category} ·{' '}
                       {timeAgo(approval.requestedAt.toISOString())}
                     </p>
                   </div>
-                  <span className="text-[11px] text-accent">Review</span>
+                  <span className="text-[11px] font-medium text-accent">Décider</span>
                 </Link>
               </li>
             ))}
@@ -163,13 +209,14 @@ export default async function HomePage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Currently running" description="Runs in flight right now">
+        <Card title="En cours d’exécution" description="Runs actifs en ce moment">
           {activeRuns.length === 0 ? (
             <div className="p-4">
               <EmptyState
                 compact
-                title="Nothing is running"
-                description="Open a project and give AI Core an objective to start a run."
+                icon={<Activity className="size-4" />}
+                title="Rien ne tourne"
+                description="Ouvrez un projet et donnez un objectif au COO pour lancer un run."
               />
             </div>
           ) : (
@@ -186,9 +233,8 @@ export default async function HomePage() {
                       </Badge>
                       <span className="truncate text-[13px] text-ink-1">{run.title}</span>
                     </div>
-                    <p className="mt-0.5 truncate text-[11px] text-ink-4">
-                      {projectById.get(run.projectId)?.name} · phase {run.phase} ·{' '}
-                      {timeAgo(run.updatedAt.toISOString())}
+                    <p className="mt-1 truncate text-[11px] text-ink-4">
+                      {projectById.get(run.projectId)?.name} · phase {run.phase} · {timeAgo(run.updatedAt.toISOString())}
                     </p>
                   </Link>
                 </li>
@@ -197,16 +243,16 @@ export default async function HomePage() {
           )}
         </Card>
 
-        <Card title="Agents working" description="Instances with live state">
+        <Card title="Agents au travail" description="Instances avec état vivant">
           {instances.length === 0 ? (
             <div className="p-4">
-              <EmptyState compact title="No agents active" description="Agents are instantiated on demand by the COO." />
+              <EmptyState compact icon={<Bot className="size-4" />} title="Aucun agent actif" description="Le COO instancie les agents à la demande." />
             </div>
           ) : (
             <ul className="divide-y divide-line">
               {instances.map((instance) => (
                 <li key={instance.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-surface-3 font-mono text-[10px] text-ink-2">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-md border border-line bg-surface-2 font-mono text-[10px] text-ink-2">
                     {(definitionByKey.get(instance.definitionKey)?.name ?? instance.definitionKey)
                       .split(' ')
                       .map((w) => w[0])
@@ -233,22 +279,32 @@ export default async function HomePage() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Live activity" description="Derived from real run events" className="lg:col-span-2">
+        <Card title="Activité en direct" description="Issue des événements réels des runs" className="lg:col-span-2">
           {events.length === 0 ? (
             <div className="p-4">
-              <EmptyState compact title="No activity yet" description="Events appear here the moment a run starts." />
+              <EmptyState compact title="Aucune activité" description="Les événements apparaissent dès qu’un run démarre." />
             </div>
           ) : (
             <ul className="max-h-96 divide-y divide-line overflow-y-auto">
               {events.map((event) => (
                 <li key={event.id} className="flex gap-3 px-4 py-2">
                   <span
-                    className={`mt-1.5 size-1.5 shrink-0 rounded-full bg-current ${toneTextClass(toneFor(event.level === 'error' ? 'failed' : event.level === 'success' ? 'completed' : event.level === 'warning' ? 'paused' : 'running'))}`}
+                    className={`mt-1.5 size-1.5 shrink-0 rounded-full bg-current ${toneTextClass(
+                      toneFor(
+                        event.level === 'error'
+                          ? 'failed'
+                          : event.level === 'success'
+                            ? 'completed'
+                            : event.level === 'warning'
+                              ? 'paused'
+                              : 'running',
+                      ),
+                    )}`}
                     aria-hidden="true"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[12.5px] text-ink-1">{event.summary}</p>
-                    <p className="text-[10.5px] text-ink-4">
+                    <p className="text-[12.5px] leading-relaxed text-ink-1">{event.summary}</p>
+                    <p className="mt-0.5 text-[10.5px] text-ink-4">
                       <span className="font-mono">{event.type}</span> · {event.actor} ·{' '}
                       {projectById.get(event.projectId)?.name} · {timeAgo(event.createdAt.toISOString())}
                     </p>
@@ -260,10 +316,10 @@ export default async function HomePage() {
         </Card>
 
         <div className="space-y-4">
-          <Card title="Recent deliverables" description="Artifacts produced by runs">
+          <Card title="Livrables récents" description="Artefacts produits par les runs">
             {artifacts.length === 0 ? (
               <div className="p-4">
-                <EmptyState compact title="No artifacts yet" description="Finished outputs are stored here with their run." />
+                <EmptyState compact icon={<Package className="size-4" />} title="Aucun artefact" description="Les sorties finalisées sont archivées ici avec leur run." />
               </div>
             ) : (
               <ul className="divide-y divide-line">
@@ -279,10 +335,10 @@ export default async function HomePage() {
             )}
           </Card>
 
-          <Card title="Recent failures" description="Runs that did not pass verification">
+          <Card title="Échecs récents" description="Runs qui n’ont pas passé la vérification">
             {failures.length === 0 ? (
               <div className="p-4">
-                <EmptyState compact title="No recent failures" />
+                <EmptyState compact icon={<CheckCircle2 className="size-4" />} title="Aucun échec récent" />
               </div>
             ) : (
               <ul className="divide-y divide-line">
@@ -290,7 +346,10 @@ export default async function HomePage() {
                   <li key={run.id} className="px-4 py-2">
                     <Link href={`/projects/${run.projectId}/runs/${run.id}`} className="block">
                       <p className="truncate text-[12.5px] text-ink-1">{run.title}</p>
-                      <p className="truncate text-[10.5px] text-danger">{run.error ?? 'No error recorded'}</p>
+                      <p className="mt-0.5 flex items-start gap-1 truncate text-[10.5px] text-danger">
+                        <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+                        <span className="truncate">{run.error ?? 'Aucune erreur enregistrée'}</span>
+                      </p>
                     </Link>
                   </li>
                 ))}
@@ -298,22 +357,41 @@ export default async function HomePage() {
             )}
           </Card>
 
-          <Card title="Model providers" description="Health as last checked">
-            <ul className="divide-y divide-line">
-              {providers.map((provider) => (
-                <li key={provider.id} className="flex items-center gap-2 px-4 py-2">
-                  <Badge tone={toneFor(provider.healthStatus)} dot={provider.healthStatus === 'online'}>
-                    {provider.healthStatus}
-                  </Badge>
-                  <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-1">{provider.name}</span>
-                  {provider.isLocal ? <span className="text-[10px] text-ink-4">local</span> : null}
-                </li>
-              ))}
-            </ul>
+          <Card
+            title="Passerelle de modèles"
+            description="État au dernier contrôle"
+            action={
+              <Link href="/models" className="text-[11px] text-ink-3 transition-colors hover:text-accent">
+                Configurer
+              </Link>
+            }
+          >
+            {providers.length === 0 ? (
+              <div className="p-4">
+                <EmptyState compact icon={<Cpu className="size-4" />} title="Aucune passerelle" description="Ajoutez llama.cpp ou Ollama dans Modèles." />
+              </div>
+            ) : (
+              <ul className="divide-y divide-line">
+                {providers.map((provider) => (
+                  <li key={provider.id} className="flex items-center gap-2 px-4 py-2">
+                    <Badge tone={toneFor(provider.healthStatus)} dot={provider.healthStatus === 'online'}>
+                      {provider.healthStatus}
+                    </Badge>
+                    <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink-1">{provider.name}</span>
+                    {provider.isLocal ? <span className="text-[10px] text-ink-4">local</span> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {providers.length > 0 ? (
+              <p className="border-t border-line px-4 py-2 text-[11px] text-ink-4">
+                {online}/{providers.length} en ligne
+              </p>
+            ) : null}
           </Card>
 
           {completed.length > 0 ? (
-            <Card title="Recently completed">
+            <Card title="Récemment terminés">
               <ul className="divide-y divide-line">
                 {completed.map((run) => (
                   <li key={run.id} className="px-4 py-2">
