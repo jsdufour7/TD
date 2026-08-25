@@ -79,10 +79,10 @@ export async function gatherBrief(projectId: string): Promise<ProjectBrief> {
     },
     memories: memories.slice(0, 10).map((m) => ({ kind: m.kind, title: m.title })),
     repository: repo ? `${repo.name} @ ${repo.currentBranch ?? repo.defaultBranch} (${repo.connectionStatus})` : null,
-    objectives: objectives.map((o) => ({ title: o.title, status: o.status, autonomyMode: o.autonomyMode })),
+    objectives: objectives.slice(0, 5).map((o) => ({ title: o.title, status: o.status, autonomyMode: o.autonomyMode })),
     tasksByStatus: [...byStatus.entries()].map(([status, items]) => ({
       status,
-      items: items.slice(0, 8).map((t) => ({
+      items: items.slice(0, 3).map((t) => ({
         title: t.title,
         agent: t.assignedAgentDefinitionKey,
         reason: t.blockedReason,
@@ -180,7 +180,9 @@ export function buildCooChatSystem(brief: ProjectBrief): string {
     `Tu es le COO de TwoDots AI Core, conseiller omniscient du projet « ${brief.projectName} ».`,
     'Réponds dans la langue de l’utilisateur. Sois direct, concis, précis. Jamais de remplissage.',
     'Appuie-toi EXCLUSIVEMENT sur l’état réel ci-dessous. N’invente JAMAIS de nom, d’agent, de tâche, de chiffre ou de statut.',
-    'N’utilise JAMAIS de gabarit de planification : pas de « Objective Restated », « Tasks Decomposed », « Specialist X », « Request Approval », ni liste markdown de plan.',
+    'SYNTHÈSE OBLIGATOIRE : ne recopie JAMAIS le bloc d’état ci-dessous tel quel, et n’utilise pas de gros titres markdown (#, ##). Réponds en 3 à 8 lignes : quelques puces courtes en langage naturel.',
+    'Si l’on te demande « état » ou « répète », résume en une vue d’ensemble (avancement, ce qui bloque et pourquoi, prochaine étape) — ne liste pas chaque tâche.',
+    'N’utilise JAMAIS de gabarit de planification : pas de « Objective Restated », « Tasks Decomposed », « Specialist X », « Request Approval ».',
     '',
     'Pour une question d’état (« où en sommes-nous », « status ») : donne en ≤ 8 lignes :',
     '  • Avancement : tâches complétées / totales, runs réussis/échoués.',

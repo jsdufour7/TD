@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { CooExecutive } from './coo-executive';
+import { CooChat } from './coo-chat';
 
 type ProjectRef = { id: string; name: string };
 type Attention = { approvals: number; failedRuns: number; blockedTasks: number };
@@ -17,7 +17,6 @@ type ThreadMessage = {
   content: string;
   createdAt: string;
 };
-type Objective = { id: string; title: string; status: string; autonomyMode: string };
 
 /**
  * Global COO — accessible par-dessus toute la plateforme, sans quitter la page.
@@ -35,7 +34,6 @@ export function GlobalCoo({ projects, attention }: { projects: ProjectRef[]; att
   const [cmdOpen, setCmdOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [thread, setThread] = useState<ThreadMessage[] | null>(null);
-  const [objectives, setObjectives] = useState<Objective[]>([]);
   const cmdRef = useRef<HTMLInputElement | null>(null);
 
   const totalAttention = attention.approvals + attention.failedRuns + attention.blockedTasks;
@@ -68,15 +66,10 @@ export function GlobalCoo({ projects, attention }: { projects: ProjectRef[]; att
   // Charge le thread + objectives du projet courant à l'ouverture du drawer.
   const loadThread = useCallback(async (projectId: string) => {
     try {
-      const [t, o] = await Promise.all([
-        fetch(`/api/projects/${projectId}/coo/thread`, { cache: 'no-store' }).then((r) => r.json()),
-        fetch(`/api/projects/${projectId}/objectives`, { cache: 'no-store' }).then((r) => r.json()),
-      ]);
+      const t = await fetch(`/api/projects/${projectId}/coo/thread`, { cache: 'no-store' }).then((r) => r.json());
       setThread((t.messages ?? []) as ThreadMessage[]);
-      setObjectives((o.objectives ?? []) as Objective[]);
     } catch {
       setThread([]);
-      setObjectives([]);
     }
   }, []);
 
@@ -144,7 +137,7 @@ export function GlobalCoo({ projects, attention }: { projects: ProjectRef[]; att
       {open ? (
         <div className="fixed inset-0 z-[60]" role="dialog" aria-modal="true" aria-label="COO">
           <button type="button" aria-label="Fermer le COO" className="absolute inset-0 bg-black/40" onClick={() => setOpen(false)} />
-          <aside className="absolute inset-y-0 right-0 flex w-full max-w-md flex-col border-l border-line-strong bg-surface-0 shadow-2xl">
+          <aside className="absolute inset-y-0 right-0 flex w-full max-w-xl flex-col border-l border-line-strong bg-surface-0 shadow-2xl">
             <header className="flex items-center justify-between border-b border-line px-4 py-3">
               <div>
                 <p className="text-[13px] font-semibold text-ink-1">AI COO</p>
@@ -161,12 +154,16 @@ export function GlobalCoo({ projects, attention }: { projects: ProjectRef[]; att
                 ✕
               </button>
             </header>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3">
-              {currentProjectId && thread ? (
-                <CooExecutive
+            <div className="min-h-0 flex-1">
+              {currentProjectId ? (
+                <CooChat
                   projectId={currentProjectId}
-                  initialMessages={thread}
-                  initialObjectives={objectives}
+                  initialMessages={(thread ?? []).map((m) => ({
+                    id: m.id,
+                    role: m.role === 'user' ? ('user' as const) : ('coo' as const),
+                    content: m.content,
+                    mode: m.mode,
+                  }))}
                 />
               ) : (
                 <p className="p-4 text-[12px] text-ink-4">Créez un projet pour parler au COO.</p>
