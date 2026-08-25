@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+next-env.d.ts
+
+# production
+dist/
+build/
+
+# env & secrets — never commit
+.env
+.env.local
+.env.*.local
+
+# AI Core runtime data (embedded database, uploads, project sandboxes)
+.data/
+
+# test artifacts
+coverage/
+tests/e2e/artifacts/
+playwright-report/
+test-results/
+
+# misc
+*.log
+.DS_Store
+*.tsbuildinfo
+.vercel
+.idea/
+.vscode/
+twodots-ai-core.zip
+public/download/
