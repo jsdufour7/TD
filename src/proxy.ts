@@ -2,32 +2,13 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/constants';
 
 /**
- * Security headers (§41). Applied to every response, including streamed ones.
+ * Security headers (Â§41). Applied to every response, including streamed ones.
  *
- * Next.js 16 renamed the `middleware` convention to `proxy`, and requires the
- * export to be named `proxy` (see next/dist/build/templates/middleware.js:
- * `isProxy ? mod.proxy : mod.middleware`). Having both files is a build error,
- * so only this one exists.
- *
- * RUNTIME CONSTRAINT: this file executes in the edge runtime. It must not import
- * `@/lib/env` or anything else that reaches a Node builtin — doing so produces
- * "Native module not found: node:path" and 500s every page. `NODE_ENV` is read
- * directly because Next inlines it for both runtimes.
- *
- * Authorization is deliberately NOT performed here: the edge runtime cannot
- * reach the database or node:crypto, so it cannot validate a session token.
- * Authorization is enforced server-side in requireUser / requireProject.
+ * Authorization is deliberately NOT performed here: authoritative authorization
+ * stays server-side in requireUser / requireProject.
  */
-
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
-/**
- * CSP nonce, generated per request.
- *
- * Edge-runtime safe on purpose: `crypto.getRandomValues` and `btoa` exist in the
- * edge sandbox, `node:crypto` does not (importing it here fails the whole
- * middleware build with "Native module not found").
- */
 function base64Nonce(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
@@ -36,30 +17,71 @@ function base64Nonce(): string {
   return btoa(binary);
 }
 
+function buildContentSecurityPolicy(nonce: string): string {
+  const scriptSrc = isDevelopment
+    ? "'self' 'unsafe-inline' 'unsafe-eval' ws: wss:"
+    : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
+
+  const connectSrc = isDevelopment ? "'self' ws: wss:" : "'self'";
+  const frameAncestors = isDevelopment ? '*' : "'self'";
+
+  return [
+    "default-src 'self'",
+    `script-src ${scriptSrc}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob: http: https:",
+    "font-src 'self' data:",
+    `connect-src ${connectSrc}`,
+    "frame-src 'self' http: https:",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    `frame-ancestors ${frameAncestors}`,
+  ].join('; ');
+}
+
+function applyResponseSecurityHeaders(
+  response: NextResponse,
+  csp: string,
+  pathname: string,
+): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('X-DNS-Prefetch-Control', 'off');
+
+  // Voice is a real product capability. The previous `microphone=()` policy
+  // disabled getUserMedia even after the user granted browser permission.
+  // Development does not restrict microphone because Arena/e2b can iframe the app;
+  // production permits only the application's own origin.
+  response.headers.set(
+    'Permissions-Policy',
+    isDevelopment ? 'camera=(), geolocation=()' : 'camera=(), microphone=(self), geolocation=()',
+  );
+
+  if (isDevelopment) {
+    response.headers.delete('X-Frame-Options');
+  } else {
+    response.headers.set('X-Frame-Options', 'DENY');
+  }
+
+  response.headers.set('Content-Security-Policy', csp);
+
+  if (!pathname.startsWith('/_next/static')) {
+    response.headers.set('Cache-Control', 'no-store, max-age=0');
+  }
+
+  return response;
+}
+
 export function proxy(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
+  const nonce = base64Nonce();
+  const csp = buildContentSecurityPolicy(nonce);
 
-  /**
-   * Redirect signed-out users away from app routes before the layout renders.
-   *
-   * This is a UX redirect based on cookie *presence* only — it is not
-   * authorization. The authoritative check remains `requireUser` in the layout
-   * and in every API route; a stale or forged cookie still gets rejected there.
-   *
-   * It also removes a real failure mode: `AppLayout` calls `redirect()` when
-   * there is no user, which throws and aborts the RSC stream mid-render. React's
-   * dev profiler then measures the aborted component with an `-Infinity` end
-   * time and throws "cannot have a negative time stamp". Redirecting here means
-   * the layout never starts rendering for a signed-out visitor.
-   *
-   * API routes are deliberately excluded: they must return 401 JSON, not a 307.
-   */
   const isProtectedRoute =
     !pathname.startsWith('/api') &&
     !pathname.startsWith('/_next') &&
     !pathname.startsWith('/favicon') &&
-    // Static download bundle. Excluded so the archive stays reachable even
-    // without a session; it contains only source code that is already in git.
     !pathname.startsWith('/download/') &&
     pathname !== '/login';
 
@@ -67,83 +89,37 @@ export function proxy(request: NextRequest): NextResponse {
     const hasSessionCookie = Boolean(request.cookies.get(SESSION_COOKIE_NAME)?.value);
 
     if (pathname === '/') {
-      return NextResponse.redirect(new URL(hasSessionCookie ? '/home' : '/login', request.url));
+      const response = NextResponse.redirect(
+        new URL(hasSessionCookie ? '/home' : '/login', request.url),
+      );
+      return applyResponseSecurityHeaders(response, csp, pathname);
     }
+
     if (!hasSessionCookie) {
       const target = new URL('/login', request.url);
       target.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(target);
+      return applyResponseSecurityHeaders(NextResponse.redirect(target), csp, pathname);
     }
   }
 
-  const response = NextResponse.next();
-
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  response.headers.set('X-DNS-Prefetch-Control', 'off');
-  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
-
   /**
-   * Framing policy.
-   *
-   * The live preview embeds this app in an iframe served from a different host,
-   * so `SAMEORIGIN` / `frame-ancestors 'self'` would stop the page rendering at
-   * all in development. Embedding is therefore permitted in development and
-   * locked down in production, where nothing should frame AI Core.
+   * Next.js extracts the nonce while rendering from the CSP present on the
+   * UPSTREAM REQUEST. Setting it only on the response is too late: the browser
+   * receives a nonce policy but Next's inline bootstrap scripts are rendered
+   * without that nonce. Forward both CSP and x-nonce to the renderer, then send
+   * the same CSP to the browser.
    */
-  if (isDevelopment) {
-    response.headers.delete('X-Frame-Options');
-  } else {
-    response.headers.set('X-Frame-Options', 'DENY');
-  }
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-nonce', nonce);
+  requestHeaders.set('Content-Security-Policy', csp);
 
-  /**
-   * Content Security Policy.
-   *
-   * Production uses a per-request nonce rather than `'self'` alone, and this is
-   * not a nicety: the App Router inlines two bootstrap scripts into every HTML
-   * document — `(self.__next_f=self.__next_f||[]).push([0])` and the
-   * `self.__next_f.push([1, …])` flight payload. A `script-src 'self'` policy
-   * blocks both, React never hydrates, and the page renders as dead HTML: the
-   * sign-in button is visibly there and does nothing. Next reads the nonce from
-   * this response header and stamps it onto the scripts it emits.
-   *
-   * `'unsafe-eval'` stays development-only: React's dev build probes for it and
-   * warns "React requires eval() in development mode" when a CSP omits it.
-   */
-  const nonce = base64Nonce();
+  const response = NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 
-  const scriptSrc = isDevelopment
-    ? "'self' 'unsafe-inline' 'unsafe-eval' ws: wss:"
-    : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
-
-  const frameAncestors = isDevelopment ? '*' : "'self'";
-
-  response.headers.set(
-    'Content-Security-Policy',
-    [
-      "default-src 'self'",
-      `script-src ${scriptSrc}`,
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: http: https:",
-      "font-src 'self' data:",
-      // Same-origin API calls plus the dev HMR websocket.
-      "connect-src 'self' ws: wss:",
-      // The workbench previews the project's own dev server in an iframe.
-      "frame-src 'self' http: https:",
-      "object-src 'none'",
-      "base-uri 'self'",
-      "form-action 'self'",
-      `frame-ancestors ${frameAncestors}`,
-    ].join('; '),
-  );
-
-  // Never let a cached authenticated page be served from a shared cache.
-  if (!request.nextUrl.pathname.startsWith('/_next/static')) {
-    response.headers.set('Cache-Control', 'no-store, max-age=0');
-  }
-
-  return response;
+  return applyResponseSecurityHeaders(response, csp, pathname);
 }
 
 export const config = {
