@@ -1,5 +1,5 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { eq } from 'drizzle-orm';
+import { type ChildProcessWithoutNullStreams } from 'node:child_process';
+import crossSpawn from 'cross-spawn';import { eq } from 'drizzle-orm';
 import { getDb, schema } from '@/db/client';
 import { AppError } from '@/lib/errors';
 import { resolveSandboxPath } from '@/lib/sandbox';
@@ -149,7 +149,7 @@ export async function runCommand(input: RunCommandInput): Promise<CommandResult>
     let settled = false;
     let previewUrl: string | null = null;
 
-    const child = spawn(input.command, input.argv, {
+    const child = crossSpawn(input.command, input.argv, {
       cwd,
       shell: false,
       detached: true, // own process group so we can kill the whole tree
