@@ -21,6 +21,21 @@ import { SESSION_COOKIE_NAME } from '@/lib/constants';
 
 const isDevelopment = process.env.NODE_ENV !== 'production';
 
+/**
+ * CSP nonce, generated per request.
+ *
+ * Edge-runtime safe on purpose: `crypto.getRandomValues` and `btoa` exist in the
+ * edge sandbox, `node:crypto` does not (importing it here fails the whole
+ * middleware build with "Native module not found").
+ */
+function base64Nonce(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
 export function proxy(request: NextRequest): NextResponse {
   const { pathname } = request.nextUrl;
 
@@ -85,14 +100,22 @@ export function proxy(request: NextRequest): NextResponse {
   /**
    * Content Security Policy.
    *
-   * `'unsafe-eval'` is required in development: React's dev build probes for it
-   * and warns "React requires eval() in development mode" when a CSP omits it
-   * (verified in the served react-server-dom-turbopack chunk). It is omitted in
-   * production, where it is a genuine risk.
+   * Production uses a per-request nonce rather than `'self'` alone, and this is
+   * not a nicety: the App Router inlines two bootstrap scripts into every HTML
+   * document — `(self.__next_f=self.__next_f||[]).push([0])` and the
+   * `self.__next_f.push([1, …])` flight payload. A `script-src 'self'` policy
+   * blocks both, React never hydrates, and the page renders as dead HTML: the
+   * sign-in button is visibly there and does nothing. Next reads the nonce from
+   * this response header and stamps it onto the scripts it emits.
+   *
+   * `'unsafe-eval'` stays development-only: React's dev build probes for it and
+   * warns "React requires eval() in development mode" when a CSP omits it.
    */
+  const nonce = base64Nonce();
+
   const scriptSrc = isDevelopment
     ? "'self' 'unsafe-inline' 'unsafe-eval' ws: wss:"
-    : "'self'";
+    : `'self' 'nonce-${nonce}' 'strict-dynamic'`;
 
   const frameAncestors = isDevelopment ? '*' : "'self'";
 

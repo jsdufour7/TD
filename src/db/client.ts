@@ -56,7 +56,24 @@ async function createDb(): Promise<Database> {
   }
 
   const dir = env.database.pgliteDataDir;
-  mkdirSync(dir, { recursive: true });
+  try {
+    mkdirSync(dir, { recursive: true });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EROFS' || code === 'EPERM') {
+      // This is what a serverless host (Vercel, Netlify, Lambda) produces: the
+      // bundle is mounted read-only and only /tmp is writable — and /tmp is
+      // wiped between invocations, so even a writable path there would silently
+      // lose every project. Say what to do instead of surfacing a bare EACCES.
+      throw new Error(
+        `PGlite cannot create its data directory at ${dir} (${code}). ` +
+          'This filesystem is read-only, which is expected on serverless hosts such as Vercel. ' +
+          'Set DATABASE_DRIVER=postgres and DATABASE_URL to a managed PostgreSQL ' +
+          '(Neon, Supabase, RDS…), or run AI Core on a host with a persistent disk.',
+      );
+    }
+    throw error;
+  }
 
   const { PGlite } = await import('@electric-sql/pglite');
   // IMPORTANT: this path must match the one used by scripts/migrate.ts, which
