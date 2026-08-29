@@ -14,6 +14,7 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  ServerCog,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -25,19 +26,19 @@ import { cn } from '@/lib/ui';
 import { openCoo } from '@/lib/ui-events';
 import { useStoredString } from '@/lib/use-stored';
 import { Avatar, Badge, IconButton, Kbd } from '@/components/ui/primitives';
-import { LogoMark } from '@/components/brand/logo';
+import { LogoMark, OfficialLogo } from '@/components/brand/logo';
 import { ThemeToggle } from './theme-toggle';
 
 type NavItem = { href: string; label: string; icon: LucideIcon; badge?: number; badgeTone?: string };
 type NavSection = { title: string; items: NavItem[] };
 
 /**
- * Left navigation (§26).
+ * Left navigation (Â§26).
  *
  * Grouped by intent rather than a flat list: what you pilot, what you operate,
  * what you configure. Collapses to an icon rail so the work surface keeps the
  * room it needs, and becomes an overlay drawer below `lg` so no action is ever
- * unreachable on a phone (§39).
+ * unreachable on a phone (Â§39).
  */
 export function Sidebar({
   user,
@@ -57,7 +58,7 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [mobileOpen, setMobileOpen] = useState(false);
-  // The rail preference is a user setting, not a layout constant — keep it.
+  // The rail preference is a user setting, not a layout constant â€” keep it.
   const [rail, setRail] = useStoredString('ai-core.sidebar', 'expanded');
   const collapsed = rail === 'collapsed';
 
@@ -77,20 +78,21 @@ export function Sidebar({
       ],
     },
     {
-      title: 'Opérations',
+      title: 'OpÃ©rations',
       items: [
         { href: '/projects', label: 'Projets', icon: FolderKanban },
+        { href: '/compute', label: 'Compute', icon: ServerCog },
         { href: '/runs', label: 'Runs', icon: Activity, badge: activeRuns, badgeTone: 'accent' },
         { href: '/approvals', label: 'Approbations', icon: ShieldCheck, badge: pendingApprovals, badgeTone: 'warn' },
       ],
     },
     {
-      title: 'Système',
+      title: 'SystÃ¨me',
       items: [
         { href: '/agents', label: 'Agents', icon: Bot },
-        { href: '/models', label: 'Modèles', icon: Cpu },
+        { href: '/models', label: 'ModÃ¨les', icon: Cpu },
         { href: '/admin', label: 'Admin', icon: Users },
-        { href: '/settings', label: 'Réglages', icon: Settings },
+        { href: '/settings', label: 'RÃ©glages', icon: Settings },
       ],
     },
   ];
@@ -110,12 +112,14 @@ export function Sidebar({
       {/* Brand */}
       <div className={cn('flex items-center gap-2.5 px-3 py-3.5', collapsed && 'lg:justify-center lg:px-2')}>
         <Link href="/home" className="flex min-w-0 items-center gap-2.5" onClick={() => setMobileOpen(false)}>
-          <LogoMark className="size-7 shrink-0 text-ink-1" />
-          <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
-            <p className="truncate text-[13px] leading-tight font-semibold">
-              <span className="text-accent">AI</span> Core
-            </p>
-            <p className="truncate text-[10px] text-ink-4">TwoDots</p>
+          <LogoMark className={cn('size-7 shrink-0 text-ink-1 lg:hidden', collapsed && 'lg:block')} />
+          <OfficialLogo
+            priority
+            className={cn('hidden h-8 w-[178px] lg:block', collapsed && 'lg:hidden')}
+          />
+          <div className="min-w-0 lg:hidden">
+            <p className="truncate text-[13px] leading-tight font-semibold"><span className="text-accent">AI</span> Core</p>
+            <p className="truncate text-[10px] text-ink-4">by TwoDots</p>
           </div>
         </Link>
         <button
@@ -128,7 +132,7 @@ export function Sidebar({
         </button>
       </div>
 
-      {/* COO entry point — the primary way to work */}
+      {/* COO entry point â€” the primary way to work */}
       <div className={cn('px-2.5 pb-2', collapsed && 'lg:px-2')}>
         <button
           type="button"
@@ -136,7 +140,7 @@ export function Sidebar({
             openCoo({ source: 'sidebar' });
             setMobileOpen(false);
           }}
-          title="Parler au COO (⌘K)"
+          title="Parler au COO (âŒ˜K)"
           className={cn(
             'group flex w-full items-center gap-2 rounded-md bg-accent px-2.5 py-2 text-[12.5px] font-medium text-accent-ink transition-colors hover:bg-accent-hover',
             collapsed && 'lg:justify-center lg:px-0',
@@ -145,7 +149,7 @@ export function Sidebar({
           <Sparkles className="size-4 shrink-0" />
           <span className={cn('flex-1 text-left', collapsed && 'lg:hidden')}>Parler au COO</span>
           <span className={cn('hidden items-center gap-0.5 opacity-70 group-hover:opacity-100 sm:flex', collapsed && 'lg:hidden')}>
-            <Kbd>⌘</Kbd>
+            <Kbd>âŒ˜</Kbd>
             <Kbd>K</Kbd>
           </span>
         </button>
@@ -241,15 +245,15 @@ export function Sidebar({
       <div className="border-t border-line p-2.5">
         {attention > 0 ? (
           <div className={cn('mb-2 rounded-md border border-warn/25 bg-warn/8 px-2.5 py-2', collapsed && 'lg:hidden')}>
-            <p className="text-[10px] font-semibold tracking-wide text-warn uppercase">À traiter</p>
+            <p className="text-[10px] font-semibold tracking-wide text-warn uppercase">Ã€ traiter</p>
             <p className="mt-0.5 text-[11px] leading-relaxed text-ink-2">
               {[
                 pendingApprovals ? `${pendingApprovals} approbation${pendingApprovals > 1 ? 's' : ''}` : null,
-                failedRuns ? `${failedRuns} échec${failedRuns > 1 ? 's' : ''}` : null,
-                blockedTasks ? `${blockedTasks} bloquée${blockedTasks > 1 ? 's' : ''}` : null,
+                failedRuns ? `${failedRuns} Ã©chec${failedRuns > 1 ? 's' : ''}` : null,
+                blockedTasks ? `${blockedTasks} bloquÃ©e${blockedTasks > 1 ? 's' : ''}` : null,
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(' Â· ')}
             </p>
           </div>
         ) : null}
@@ -263,7 +267,7 @@ export function Sidebar({
           <span className={cn('hidden lg:inline-flex', collapsed && 'lg:hidden')}>
             <ThemeToggle />
           </span>
-          <IconButton label="Se déconnecter" onClick={signOut} className={cn(collapsed && 'lg:hidden')}>
+          <IconButton label="Se dÃ©connecter" onClick={signOut} className={cn(collapsed && 'lg:hidden')}>
             <LogOut className="size-4" />
           </IconButton>
         </div>
@@ -277,7 +281,7 @@ export function Sidebar({
           )}
         >
           {collapsed ? <PanelLeftOpen className="size-3.5" /> : <PanelLeftClose className="size-3.5" />}
-          <span className={collapsed ? 'lg:hidden' : undefined}>Réduire</span>
+          <span className={collapsed ? 'lg:hidden' : undefined}>RÃ©duire</span>
         </button>
       </div>
     </div>
