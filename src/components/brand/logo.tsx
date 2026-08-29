@@ -1,7 +1,5 @@
-import Image from 'next/image';
 import { cn } from '@/lib/ui';
 
-/** Official TwoDots | AI Core assets supplied by the product owner. */
 export const BRAND_ASSETS = {
   primary: '/brand/twodots-ai-core-logo-primary-transparent.png',
   monochrome: '/brand/twodots-ai-core-logo-monochrome-transparent.png',
@@ -13,43 +11,29 @@ export const BRAND_ASSETS = {
 } as const;
 
 /**
- * Exact official horizontal lock-up. The reversed file is shown in the default
- * dark theme; the primary file is shown in light mode.
+ * Exact official lock-up. It is rendered as a CSS background instead of through
+ * next/image so local development never depends on the image optimizer route.
  */
 export function OfficialLogo({
   className,
-  priority = false,
+  compact = false,
 }: {
   className?: string;
-  priority?: boolean;
+  compact?: boolean;
 }) {
   return (
-    <span className={cn('relative block h-8 w-[188px]', className)}>
-      <Image
-        src={BRAND_ASSETS.reversed}
-        alt="TwoDots | AI Core"
-        fill
-        priority={priority}
-        sizes="220px"
-        className="brand-logo-dark object-contain object-left"
-      />
-      <Image
-        src={BRAND_ASSETS.primary}
-        alt="TwoDots | AI Core"
-        fill
-        priority={priority}
-        sizes="220px"
-        className="brand-logo-light object-contain object-left"
-      />
-    </span>
+    <span
+      role="img"
+      aria-label="TwoDots | AI Core"
+      className={cn(
+        'brand-lockup block shrink-0 bg-contain bg-left bg-no-repeat',
+        compact ? 'h-7 w-[164px]' : 'h-9 w-[214px]',
+        className,
+      )}
+    />
   );
 }
 
-/**
- * Compact scalable mark retained for icon-only contexts such as the collapsed
- * sidebar. Its geometry mirrors the official mark; full lock-ups always use the
- * supplied raster assets above.
- */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 96 96" className={className} fill="none" aria-hidden="true">
@@ -80,8 +64,8 @@ export function Logo({
 }) {
   return (
     <div className={cn('flex items-center gap-3', className)}>
-      <OfficialLogo className="h-9 w-[216px]" />
-      {tagline ? <span className="ml-1 text-xs text-ink-3">{tagline}</span> : null}
+      <OfficialLogo />
+      {tagline ? <span className="text-xs text-ink-3">{tagline}</span> : null}
     </div>
   );
 }
