@@ -121,3 +121,21 @@ routes. Bout en bout réel : passerelle locale factice (llama.cpp-like) enregist
 → 2 modèles découverts → `stub-coder-13b` assigné au COO → réponse du COO
 `mode: "model"` signée par ce modèle (et non par le repli `BALANCED`), puis
 fournisseur supprimé et diagnostic d'indisponibilité vérifié.
+
+---
+
+## Cycle 6 — Déploiement hébergé : trois blocages réels de la connexion
+
+Reproduits et corrigés contre un build de production (`next build` + `next start`),
+pas déduits :
+
+1. **CSP** : `script-src 'self'` bloquait les 2 scripts inline d'amorçage RSC →
+   aucune hydratation → bouton mort. Corrigé par nonce par requête, vérifié sur
+   `/login` et `/home`.
+2. **Amorçage** : la connexion interrogeait `users` avant toute migration sur une
+   base neuve (`relation "users" does not exist`, 500). Corrigé dans
+   `authenticateWithPassword()` + 3 tests de non-régression.
+3. **PGlite/serverless** : `EACCES` sur système de fichiers en lecture seule.
+   Message actionnable + `GET /api/health` + `vercel.json` + `DEPLOIEMENT_VERCEL.md`.
+
+`npm run verify` → typecheck 0, lint 0, **97/97 tests**, build OK.

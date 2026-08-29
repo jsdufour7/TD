@@ -298,3 +298,51 @@ diagnostic précis.
 **Vérification.** 8 tests d'intégration + test de bout en bout réel avec une
 passerelle locale factice : `stub-coder-13b` assigné → réponse du COO
 `mode:"model"` produite par ce modèle.
+
+---
+
+## B-18 — Sur Vercel, « Entrer » ne fait rien (résolu)
+
+**Symptôme.** Déployé sur Vercel : la page de connexion s'affiche, le clic sur
+« Entrer » n'a aucun effet, aucune erreur.
+
+**Cause.** `src/proxy.ts` envoyait `script-src 'self'` en production. L'App Router
+injecte deux scripts inline dans chaque document
+(`(self.__next_f=self.__next_f||[]).push([0])` puis `self.__next_f.push([1,…])`) :
+sans `'unsafe-inline'` ni nonce, le navigateur les bloque, React ne s'hydrate
+jamais, la page reste du HTML mort. En développement la politique incluait
+`'unsafe-inline'`, ce qui masquait complètement le problème.
+
+**Vérification de la cause.** Build de production servi localement :
+`script-src 'self'` + 2 scripts inline **sans nonce**.
+
+**Correction.** Nonce par requête (`crypto.getRandomValues` + `btoa`, compatibles
+edge) propagé par Next à ses scripts :
+`script-src 'self' 'nonce-…' 'strict-dynamic'`. Vérifié après correction sur
+`/login` et `/home` : 2 scripts inline, 2 avec le nonce de l'en-tête.
+
+## B-19 — Premier déploiement : la connexion renvoie 500 (résolu)
+
+**Cause.** `ensurePlatformReady()` n'était appelé que par `getCurrentUser()`. La
+route de connexion ne peut pas passer par là (aucune session n'existe encore) :
+les migrations n'étaient jamais appliquées avant la première requête.
+
+```
+error: relation "users" does not exist  →  HTTP 500
+```
+
+**Correction.** `authenticateWithPassword()` amorce la plateforme. Commentaire de
+`getCurrentUser()` corrigé : il affirmait à tort être l'unique point d'entrée.
+
+**Vérification.** Base **vierge** : `POST /api/auth/login` → 200, cookie posé,
+journal `applied migration 0000…0003` + `created bootstrap administrator`.
+Test de non-régression : `tests/integration/auth-bootstrap.test.ts` (3 tests).
+
+## B-20 — PGlite ne persiste pas sur un hôte serverless (contrainte documentée)
+
+**Reproduction locale** (répertoire non inscriptible) :
+`PGlite échoue -> EACCES: permission denied, mkdir '/tmp/ro-test/pglite2'`.
+
+**Correction.** `src/db/client.ts` remplace le `EACCES` brut par un message
+actionnable ; `GET /api/health` signale `DATABASE_DRIVER=pglite in production`.
+Voir `DEPLOIEMENT_VERCEL.md`.

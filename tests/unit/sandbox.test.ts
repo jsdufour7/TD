@@ -47,7 +47,11 @@ describe('sandbox path confinement', () => {
 
     const linkDir = path.join(root, 'links');
     mkdirSync(linkDir, { recursive: true });
-    symlinkSync(outside, path.join(linkDir, 'escape'));
+    symlinkSync(
+  outside,
+  path.join(linkDir, 'escape'),
+  process.platform === 'win32' ? 'junction' : 'dir',
+);
 
     // The static containment check passes (the path is textually inside the
     // root); only realpath resolution catches this.
@@ -61,7 +65,11 @@ describe('sandbox path confinement', () => {
 
     const linkDir = path.join(root, 'internal-links');
     mkdirSync(linkDir, { recursive: true });
-    symlinkSync(target, path.join(linkDir, 'to-real'));
+    symlinkSync(
+  target,
+  path.join(linkDir, 'to-real'),
+  process.platform === 'win32' ? 'junction' : 'dir',
+);
 
     expect(() => resolveSandboxPath(root, 'internal-links/to-real/a.txt')).not.toThrow();
   });

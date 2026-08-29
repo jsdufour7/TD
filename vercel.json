@@ -1,0 +1,22 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "nextjs",
+  "buildCommand": "if [ -n \"$DATABASE_URL\" ]; then DATABASE_DRIVER=postgres npm run db:migrate; fi && next build",
+  "installCommand": "npm install",
+  "functions": {
+    "src/app/**/*": {
+      "maxDuration": 30
+    }
+  },
+  "headers": [
+    {
+      "source": "/download/(.*)",
+      "headers": [
+        {
+          "key": "Content-Disposition",
+          "value": "attachment"
+        }
+      ]
+    }
+  ]
+}

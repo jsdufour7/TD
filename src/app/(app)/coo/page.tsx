@@ -1,27 +1,22 @@
 import Link from 'next/link';
 import { asc, desc, eq } from 'drizzle-orm';
-import { notFound } from 'next/navigation';
 import { getDb, schema } from '@/db/client';
 import { getCurrentUser } from '@/auth/session';
 import { requireUser } from '@/auth/guards';
 import { CooExecutive } from '@/components/coo/coo-executive';
-import { Sparkles } from 'lucide-react';
+import { FolderPlus, Sparkles } from 'lucide-react';
 import { PageHeader } from '@/components/layout/page-header';
+import { Card, EmptyState } from '@/components/ui/primitives';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'COO' };
 
-/**
- * Global COO. The COO is the primary entry point everywhere on the platform:
- * pick a project and talk to its COO without navigating into the project first.
- * The conversation is the same persistent thread as the project's Chat page.
- */
 export default async function CooPage({ searchParams }: { searchParams: Promise<{ project?: string }> }) {
   await requireUser();
   const { project: projectIdParam } = await searchParams;
   const db = await getDb();
-
   const user = await getCurrentUser();
+
   const projects = await db
     .select()
     .from(schema.projects)
@@ -29,7 +24,33 @@ export default async function CooPage({ searchParams }: { searchParams: Promise<
     .orderBy(desc(schema.projects.updatedAt));
 
   const projectId = projectIdParam ?? projects[0]?.id;
-  if (!projectId) notFound();
+
+  if (!projectId) {
+    return (
+      <div className="mx-auto max-w-6xl space-y-4 p-5 lg:p-7">
+        <PageHeader
+          icon={<Sparkles className="size-4" />}
+          title="COO"
+          subtitle="Votre orchestrateur autonome. Créez un premier projet pour lui donner un contexte de travail persistant."
+        />
+        <Card>
+          <div className="p-5">
+            <EmptyState
+              title="Le COO attend son premier projet"
+              description="Un projet rassemble les instructions, fichiers, mémoire, conversations, tâches et runs que le COO utilisera pour travailler avec vous."
+              icon={<Sparkles className="size-5" />}
+              action={
+                <Link href="/projects" className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-xs font-semibold text-accent-ink hover:bg-accent-hover">
+                  <FolderPlus className="size-4" />
+                  Créer un projet
+                </Link>
+              }
+            />
+          </div>
+        </Card>
+      </div>
+    );
+  }
 
   const threads = await db
     .select()
@@ -45,15 +66,15 @@ export default async function CooPage({ searchParams }: { searchParams: Promise<
           .from(schema.messages)
           .where(eq(schema.messages.conversationId, firstThreadId))
           .orderBy(asc(schema.messages.createdAt))
-      ).map((m) => ({
-        id: m.id,
-        role: m.role,
-        authorName: m.authorName,
-        agentKey: (m.metadata as { agentKey?: string } | null)?.agentKey ?? null,
-        mode: (m.metadata as { mode?: string } | null)?.mode ?? null,
-        runId: (m.metadata as { runId?: string } | null)?.runId ?? null,
-        content: m.content,
-        createdAt: m.createdAt.toISOString(),
+      ).map((message) => ({
+        id: message.id,
+        role: message.role,
+        authorName: message.authorName,
+        agentKey: (message.metadata as { agentKey?: string } | null)?.agentKey ?? null,
+        mode: (message.metadata as { mode?: string } | null)?.mode ?? null,
+        runId: (message.metadata as { runId?: string } | null)?.runId ?? null,
+        content: message.content,
+        createdAt: message.createdAt.toISOString(),
       }))
     : [];
 
@@ -64,24 +85,24 @@ export default async function CooPage({ searchParams }: { searchParams: Promise<
     .orderBy(desc(schema.objectives.createdAt));
 
   return (
-    <div className="space-y-4 p-5">
+    <div className="mx-auto max-w-[1480px] space-y-4 p-5 lg:p-7">
       <PageHeader
         icon={<Sparkles className="size-4" />}
         title="COO"
-        subtitle="Le COO est votre point d'entrée partout : parlez-lui, il comprend, planifie et exécute."
+        subtitle="Parlez-lui naturellement : il comprend, planifie, délègue, exécute et vous rapporte l’état réel."
         action={
           <nav className="flex max-w-full flex-wrap gap-1" aria-label="Projets">
-            {projects.map((p) => (
+            {projects.map((project) => (
               <Link
-                key={p.id}
-                href={`/coo?project=${p.id}`}
+                key={project.id}
+                href={`/coo?project=${project.id}`}
                 className={
-                  p.id === projectId
-                    ? 'rounded border border-accent/40 bg-accent/15 px-2 py-1 text-[11px] text-accent'
-                    : 'rounded border border-line px-2 py-1 text-[11px] text-ink-3 hover:text-ink-1'
+                  project.id === projectId
+                    ? 'rounded-md border border-accent/40 bg-accent/15 px-2.5 py-1.5 text-[11px] text-accent'
+                    : 'rounded-md border border-line bg-surface-1 px-2.5 py-1.5 text-[11px] text-ink-3 hover:text-ink-1'
                 }
               >
-                {p.name}
+                {project.name}
               </Link>
             ))}
           </nav>
@@ -90,11 +111,11 @@ export default async function CooPage({ searchParams }: { searchParams: Promise<
       <CooExecutive
         projectId={projectId}
         initialMessages={initialMessages}
-        initialObjectives={objectives.map((o) => ({
-          id: o.id,
-          title: o.title,
-          status: o.status,
-          autonomyMode: o.autonomyMode,
+        initialObjectives={objectives.map((objective) => ({
+          id: objective.id,
+          title: objective.title,
+          status: objective.status,
+          autonomyMode: objective.autonomyMode,
         }))}
       />
     </div>

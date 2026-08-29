@@ -116,11 +116,13 @@ export async function destroySession(): Promise<void> {
 
 /** Returns the authenticated user, or null. Never throws. */
 export async function getCurrentUser(): Promise<User | null> {
-  // Single chokepoint for platform boot: every page and API route that touches
-  // the database goes through this function (directly, or via requireUser /
-  // requireProject). Doing it here guarantees migrations and the run-engine
-  // worker exist before any query, without needing an edge-incompatible
-  // instrumentation hook. See src/platform/boot.ts.
+  // Chokepoint for platform boot: every page and API route that reads the
+  // *session* goes through this function (directly, or via requireUser /
+  // requireProject). Note it is NOT the only database entry point — sign-in runs
+  // before any session exists and boots the platform itself, see
+  // authenticateWithPassword below. Doing it here guarantees migrations and the
+  // run-engine worker exist before any query, without needing an
+  // edge-incompatible instrumentation hook. See src/platform/boot.ts.
   await ensurePlatformReady();
 
   const store = await cookies();
@@ -148,6 +150,12 @@ export async function authenticateWithPassword(
   email: string,
   password: string,
 ): Promise<User | null> {
+  // Login is the one database entry point that runs *before* a session exists,
+  // so it cannot rely on getCurrentUser() to have booted the platform. Without
+  // this, a freshly deployed instance answers the very first sign-in with
+  // `relation "users" does not exist` — the schema was never created.
+  await ensurePlatformReady();
+
   const db = await getDb();
   const rows = await db
     .select()
